@@ -362,14 +362,8 @@ func (t githubTab) fetchNotifications() tea.Cmd {
 
 func (t githubTab) loadWatchedPRs() tea.Cmd {
 	return func() tea.Msg {
-		all, _ := t.store.LoadTrackedPRs()
-		var active []storage.TrackedPR
-		for _, pr := range all {
-			if pr.DoneAt == nil {
-				active = append(active, pr)
-			}
-		}
-		return ghWatchedPRsLoadedMsg{prs: active}
+		prs, _ := t.store.LoadActiveTrackedPRs()
+		return ghWatchedPRsLoadedMsg{prs: prs}
 	}
 }
 
@@ -399,7 +393,7 @@ func (t githubTab) watchCurrentNotif() tea.Cmd {
 		}
 		return func() tea.Msg {
 			_ = t.store.AddTrackedPR(pr)
-			prs, _ := t.store.LoadTrackedPRs()
+			prs, _ := t.store.LoadActiveTrackedPRs()
 			return ghWatchedPRsLoadedMsg{prs: prs}
 		}
 	}
@@ -426,7 +420,7 @@ func (t githubTab) watchCurrentNotif() tea.Cmd {
 			pr.AddedAt = time.Now().Format("2006-01-02")
 			pr.NotificationID = n.ID
 			_ = t.store.AddTrackedPR(*pr)
-			prs, _ := t.store.LoadTrackedPRs()
+			prs, _ := t.store.LoadActiveTrackedPRs()
 			return ghWatchedPRsLoadedMsg{prs: prs}
 		}
 	}

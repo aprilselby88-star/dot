@@ -233,6 +233,21 @@ func (s *Store) LoadTrackedPRs() ([]TrackedPR, error) {
 	return f.PRs, nil
 }
 
+// LoadActiveTrackedPRs returns only PRs that have not been marked done.
+func (s *Store) LoadActiveTrackedPRs() ([]TrackedPR, error) {
+	all, err := s.LoadTrackedPRs()
+	if err != nil {
+		return nil, err
+	}
+	var active []TrackedPR
+	for _, pr := range all {
+		if pr.DoneAt == nil {
+			active = append(active, pr)
+		}
+	}
+	return active, nil
+}
+
 func (s *Store) SaveTrackedPRs(prs []TrackedPR) error {
 	return s.save("tracked_prs.json", prsFile{PRs: prs})
 }

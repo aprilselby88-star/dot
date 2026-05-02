@@ -58,7 +58,7 @@ func New(cfg *config.GitHubConfig) (*Client, error) {
 // filtered to priority repos if configured.
 func (c *Client) FetchNotifications(ctx context.Context) ([]Notification, error) {
 	opts := &github.NotificationListOptions{
-		All:         true,
+		All:         false, // unread only — matches GitHub's inbox default
 		ListOptions: github.ListOptions{PerPage: 50},
 	}
 
