@@ -1,0 +1,63 @@
+# ~/.config/dot/config.yaml
+# Copy this to the above path and edit to your needs.
+# First run will auto-create this file with defaults.
+
+github:
+  # Personal access token — or leave blank and set GITHUB_TOKEN env var
+  # For enterprise: also set base_url below
+  token: ""
+
+  # Leave empty for github.com; for GitHub Enterprise set your root URL:
+  # base_url: "https://github.mycompany.com"
+  base_url: ""
+
+  # Only show notifications from these repos (owner/repo format)
+  # Leave empty to show all repos
+  priority_repos:
+    - myorg/backend
+    - myorg/frontend
+    - myorg/infra
+
+  # How often to auto-refresh notifications (seconds). Default 300 = 5 min
+  poll_interval_sec: 300
+
+obsidian:
+  vault_path: "~/Documents/Obsidian/MyVault"
+
+  # Path template for daily notes, relative to vault_path
+  # Uses Go time.Format codes:
+  #   06 = 2-digit year  02 = day  01 = month number  January = month name
+  # The example below produces: DailyNotes/26/05 May/02-05-26.md
+  notes_template: "DailyNotes/06/01 January/02-01-06"
+
+storage:
+  # Where organizer stores todos, meetings, notes, tracked PRs (JSON files)
+  dir: "~/.local/share/organizer"
+
+hotkeys:
+  # Tab switching — these work ONLY when not in a text input
+  tab_github:   "1"
+  tab_meetings: "2"
+  tab_todos:    "3"
+  tab_notes:    "4"
+  tab_summary:  "5"
+
+  # Actions (context-sensitive)
+  new_item:     "n"
+  delete:       "d"
+  watch_pr:     "w"
+  refresh:      "R"
+  save:         "ctrl+s"
+  open_browser: "o"
+
+# Capability tags for cross-cutting concerns
+# These are shown as helpers in the tag entry fields
+tags:
+  - name: "Project Alpha"
+    tag:  "#alpha"
+  - name: "Project Beta"
+    tag:  "#beta"
+  - name: "Infra"
+    tag:  "#infra"
+  - name: "Team Work"
+    tag:  "#team"
