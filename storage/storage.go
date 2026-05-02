@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -351,6 +352,70 @@ func (s *Store) AllTags() ([]string, error) {
 	}
 	sort.Strings(tags)
 	return tags, nil
+}
+
+// ---- Date-range queries (used by summary generation) ----
+
+// LoadTodosInRange returns todos whose date falls within [from, to] (inclusive, "2006-01-02" format).
+func (s *Store) LoadTodosInRange(from, to string) ([]TodoItem, error) {
+	all, err := s.LoadTodos()
+	if err != nil {
+		return nil, err
+	}
+	var result []TodoItem
+	for _, t := range all {
+		if t.Date >= from && t.Date <= to {
+			result = append(result, t)
+		}
+	}
+	return result, nil
+}
+
+// LoadMeetingsInRange returns meetings whose date falls within [from, to].
+func (s *Store) LoadMeetingsInRange(from, to string) ([]Meeting, error) {
+	all, err := s.LoadMeetings()
+	if err != nil {
+		return nil, err
+	}
+	var result []Meeting
+	for _, m := range all {
+		if m.Date >= from && m.Date <= to {
+			result = append(result, m)
+		}
+	}
+	return result, nil
+}
+
+// LoadNotesInRange returns a map of date → note content for all dates in [from, to].
+func (s *Store) LoadNotesInRange(from, to string) (map[string]string, error) {
+	var f dailyNotesFile
+	if err := s.load("daily_notes.json", &f); err != nil {
+		return nil, err
+	}
+	result := map[string]string{}
+	for date, content := range f.Notes {
+		if date >= from && date <= to && strings.TrimSpace(content) != "" {
+			result[date] = content
+		}
+	}
+	return result, nil
+}
+
+// LoadPRsInRange returns tracked PRs that were added or completed within [from, to].
+func (s *Store) LoadPRsInRange(from, to string) ([]TrackedPR, error) {
+	all, err := s.LoadTrackedPRs()
+	if err != nil {
+		return nil, err
+	}
+	var result []TrackedPR
+	for _, pr := range all {
+		addedIn := pr.AddedAt >= from && pr.AddedAt <= to
+		doneIn := pr.DoneAt != nil && pr.DoneAt.Format("2006-01-02") >= from && pr.DoneAt.Format("2006-01-02") <= to
+		if addedIn || doneIn {
+			result = append(result, pr)
+		}
+	}
+	return result, nil
 }
 
 // ---- Stats ----

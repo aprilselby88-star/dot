@@ -32,6 +32,12 @@ type statusMsg struct {
 // ghSyncRequestMsg asks app to sync the Obsidian daily note.
 type ghSyncRequestMsg struct{}
 
+// summaryGeneratedMsg is returned after attempting periodic summary generation.
+type summaryGeneratedMsg struct {
+	paths []string
+	err   error
+}
+
 // App is the root bubbletea model.
 type App struct {
 	cfg    *config.Config
@@ -79,6 +85,7 @@ func (a App) Init() tea.Cmd {
 		a.meetings.Init(),
 		a.todos.Init(),
 		a.notes.Init(),
+		a.checkSummaries(),
 	)
 }
 
@@ -180,6 +187,24 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case ghSyncRequestMsg, ghWatchPRDoneMsg:
 			cmds = append(cmds, a.syncObsidian())
+		case summaryGeneratedMsg:
+			smsg := msg.(summaryGeneratedMsg)
+			if smsg.err != nil {
+				cmds = append(cmds, func() tea.Msg {
+					return statusMsg{text: "Summary failed: " + smsg.err.Error(), isError: true}
+				})
+			} else if len(smsg.paths) > 0 {
+				label := "Weekly summary"
+				if len(smsg.paths) == 2 {
+					label = "Weekly + monthly summaries"
+				} else if strings.Contains(smsg.paths[0], "Month") {
+					label = "Monthly summary"
+				}
+				p := smsg.paths[0]
+				cmds = append(cmds, func() tea.Msg {
+					return statusMsg{text: label + " → " + p}
+				})
+			}
 		}
 
 		return a, tea.Batch(cmds...)
@@ -259,6 +284,33 @@ func (a App) syncObsidian() tea.Cmd {
 			return statusMsg{text: "Obsidian sync failed: " + err.Error(), isError: true}
 		}
 		return statusMsg{text: "Obsidian → " + path}
+	}
+}
+
+// checkSummaries generates weekly/monthly summaries if today triggers one and
+// the file doesn't already exist. Called once on startup.
+func (a App) checkSummaries() tea.Cmd {
+	return func() tea.Msg {
+		now := time.Now()
+		var paths []string
+
+		weekPath, err := a.obs.WriteWeeklySummaryIfNeeded(now, a.store)
+		if err != nil {
+			return summaryGeneratedMsg{err: err}
+		}
+		if weekPath != "" {
+			paths = append(paths, weekPath)
+		}
+
+		monthPath, err := a.obs.WriteMonthlySummaryIfNeeded(now, a.store)
+		if err != nil {
+			return summaryGeneratedMsg{err: err}
+		}
+		if monthPath != "" {
+			paths = append(paths, monthPath)
+		}
+
+		return summaryGeneratedMsg{paths: paths}
 	}
 }
 
