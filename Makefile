@@ -1,5 +1,6 @@
-BINARY   := dot
-GOFLAGS  := -trimpath
+BINARY          := dot
+GOFLAGS         := -trimpath
+export CGO_ENABLED := 0
 
 .PHONY: build install run vet clean
 
