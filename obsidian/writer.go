@@ -69,7 +69,11 @@ func (w *Writer) Build(
 	if len(allTags) > 0 {
 		b.WriteString("---\ntags:\n")
 		for _, tag := range allTags {
-			fmt.Fprintf(&b, "  - %s\n", strings.TrimPrefix(tag, "#"))
+			name := strings.TrimSpace(strings.TrimLeft(tag, "#"))
+			if name == "" {
+				continue
+			}
+			fmt.Fprintf(&b, "  - %s\n", name)
 		}
 		b.WriteString("---\n\n")
 	}
@@ -178,7 +182,7 @@ func (w *Writer) Build(
 			fmt.Fprintf(&b, "**Attendees:** %s\n\n", strings.Join(m.Attendees, ", "))
 		}
 		if len(m.Tags) > 0 {
-			fmt.Fprintf(&b, "**Tags:** %s\n\n", strings.Join(m.Tags, " "))
+			fmt.Fprintf(&b, "%s\n\n", strings.Join(m.Tags, " "))
 		}
 		if len(m.Decisions) > 0 {
 			b.WriteString("**Decisions:**\n")
@@ -189,10 +193,9 @@ func (w *Writer) Build(
 		}
 		if m.Summary != "" {
 			b.WriteString(m.Summary)
-			b.WriteString("\n")
 		}
 		if m.RawNotes != "" {
-			b.WriteString("\n<details><summary>Raw Notes</summary>\n\n")
+			b.WriteString("<details><summary>Raw Notes</summary>\n\n")
 			b.WriteString(m.RawNotes)
 			b.WriteString("\n\n</details>\n\n")
 		}
