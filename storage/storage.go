@@ -32,6 +32,7 @@ type Meeting struct {
 	RawNotes  string   `json:"raw_notes"`
 	Summary   string   `json:"summary"`
 	Tags      []string `json:"tags,omitempty"`
+	Decisions []string `json:"decisions,omitempty"`
 }
 
 // TrackedPR is a pull request added to the watch zone.

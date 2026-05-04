@@ -28,12 +28,13 @@ type meetingSavedMsg struct{ err error }
 type meetingMode int
 
 const (
-	meetingModeList    meetingMode = iota
-	meetingModeView                // viewing a single meeting
-	meetingModeTitle               // new: entering title
-	meetingModeAttend              // new: entering attendees
-	meetingModeTags                // new: entering tags
-	meetingModeNotes               // new: entering raw notes
+	meetingModeList      meetingMode = iota
+	meetingModeView                  // viewing a single meeting
+	meetingModeTitle                 // new: entering title
+	meetingModeAttend                // new: entering attendees
+	meetingModeTags                  // new: entering tags
+	meetingModeNotes                 // new: entering raw notes
+	meetingModeDecisions             // new: entering explicit decisions
 )
 
 // ---- model ----
@@ -49,10 +50,11 @@ type meetingsTab struct {
 	cursor   int
 
 	// form fields
-	titleInput  textinput.Model
-	attendInput textinput.Model
-	tagsInput   textinput.Model
-	notesArea   textarea.Model
+	titleInput     textinput.Model
+	attendInput    textinput.Model
+	tagsInput      textinput.Model
+	notesArea      textarea.Model
+	decisionsArea  textarea.Model
 
 	// view pane
 	vp viewport.Model
@@ -77,18 +79,23 @@ func newMeetingsTab(cfg *config.Config, store *storage.Store) meetingsTab {
 	tgi.CharLimit = 200
 
 	ta := textarea.New()
-	ta.Placeholder = "Dump your raw meeting notes here…\n\nTip: prefix lines with 'Action:' or 'Decision:' for auto-extraction.\nAction items are automatically added to your Todos."
+	ta.Placeholder = "Dump your raw meeting notes here…\n\nTip: prefix lines with 'Action:' or '- [ ]' to auto-create todos."
 	ta.ShowLineNumbers = false
 
+	da := textarea.New()
+	da.Placeholder = "One decision per line…\n\nExample:\nWe will migrate to PostgreSQL by Q3\n@alice owns the auth refactor"
+	da.ShowLineNumbers = false
+
 	return meetingsTab{
-		cfg:         cfg,
-		store:       store,
-		mode:        meetingModeList,
-		titleInput:  ti,
-		attendInput: ai,
-		tagsInput:   tgi,
-		notesArea:   ta,
-		vp:          viewport.New(80, 20),
+		cfg:           cfg,
+		store:         store,
+		mode:          meetingModeList,
+		titleInput:    ti,
+		attendInput:   ai,
+		tagsInput:     tgi,
+		notesArea:     ta,
+		decisionsArea: da,
+		vp:            viewport.New(80, 20),
 	}
 }
 
@@ -104,6 +111,8 @@ func (t meetingsTab) UpdateSize(w, h int) (meetingsTab, tea.Cmd) {
 	t.width, t.height = w, h
 	t.notesArea.SetWidth(w - 4)
 	t.notesArea.SetHeight(h - 10)
+	t.decisionsArea.SetWidth(w - 4)
+	t.decisionsArea.SetHeight(h - 10)
 	t.vp.Width = w
 	t.vp.Height = h - 4
 	return t, nil
@@ -149,6 +158,8 @@ func (t meetingsTab) Update(msg tea.Msg) (meetingsTab, tea.Cmd) {
 			return t.handleTagsKey(msg)
 		case meetingModeNotes:
 			return t.handleNotesKey(msg)
+		case meetingModeDecisions:
+			return t.handleDecisionsKey(msg)
 		}
 	}
 
@@ -169,6 +180,10 @@ func (t meetingsTab) Update(msg tea.Msg) (meetingsTab, tea.Cmd) {
 	case meetingModeNotes:
 		var cmd tea.Cmd
 		t.notesArea, cmd = t.notesArea.Update(msg)
+		cmds = append(cmds, cmd)
+	case meetingModeDecisions:
+		var cmd tea.Cmd
+		t.decisionsArea, cmd = t.decisionsArea.Update(msg)
 		cmds = append(cmds, cmd)
 	case meetingModeView:
 		var cmd tea.Cmd
@@ -307,6 +322,12 @@ func (t meetingsTab) handleNotesKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+s":
 		return t, t.saveMeeting()
+	case "ctrl+d":
+		t.mode = meetingModeDecisions
+		t.notesArea.Blur()
+		t.decisionsArea.SetValue("")
+		t.decisionsArea.Focus()
+		return t, textarea.Blink
 	case "esc":
 		t.mode = meetingModeList
 		t.notesArea.Blur()
@@ -332,12 +353,32 @@ func (t meetingsTab) handleNotesKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
 	return t, cmd
 }
 
+func (t meetingsTab) handleDecisionsKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+s":
+		return t, t.saveMeeting()
+	case "esc":
+		t.mode = meetingModeList
+		t.decisionsArea.Blur()
+		return t, nil
+	case "ctrl+b":
+		t.mode = meetingModeNotes
+		t.decisionsArea.Blur()
+		t.notesArea.Focus()
+		return t, textarea.Blink
+	}
+	var cmd tea.Cmd
+	t.decisionsArea, cmd = t.decisionsArea.Update(msg)
+	return t, cmd
+}
+
 // saveMeeting saves the meeting and auto-creates todos from any action items found in the notes.
 func (t meetingsTab) saveMeeting() tea.Cmd {
 	title := strings.TrimSpace(t.titleInput.Value())
 	raw := strings.TrimSpace(t.notesArea.Value())
 	attendees := parseAttendees(t.attendInput.Value())
 	tags := parseTags(t.tagsInput.Value())
+	decisions := parseDecisions(t.decisionsArea.Value())
 	summary := summarizeMeeting(raw)
 	actions := extractActions(raw)
 	meetingID := fmt.Sprintf("%d", time.Now().UnixNano())
@@ -350,6 +391,7 @@ func (t meetingsTab) saveMeeting() tea.Cmd {
 		RawNotes:  raw,
 		Summary:   summary,
 		Tags:      tags,
+		Decisions: decisions,
 	}
 
 	return func() tea.Msg {
@@ -433,10 +475,21 @@ func (t meetingsTab) View() string {
 		b.WriteString("\n\n")
 		b.WriteString(inputBoxFocusedStyle.Width(t.width-4).Render(t.notesArea.View()) + "\n\n")
 		b.WriteString(buildHints(
-			[]string{"Ctrl+S", "ctrl+b", "ctrl+w", "ctrl+t", "Esc"},
-			[]string{"save", "tags", "attendees", "title", "cancel"},
+			[]string{"Ctrl+S", "Ctrl+D", "ctrl+b", "ctrl+w", "ctrl+t", "Esc"},
+			[]string{"save", "decisions", "tags", "attendees", "title", "cancel"},
 		))
 		b.WriteString(hintStyle.Render("  Tip: prefix lines with Action: or - [ ] to auto-create todos") + "\n")
+
+	case meetingModeDecisions:
+		b.WriteString("\n  " + t.renderStepBreadcrumb(meetingModeDecisions) + "\n\n")
+		b.WriteString(inputLabelStyle.Render("  Decisions") + "  " + mutedStyle.Render(t.titleInput.Value()))
+		b.WriteString("\n\n")
+		b.WriteString(inputBoxFocusedStyle.Width(t.width-4).Render(t.decisionsArea.View()) + "\n\n")
+		b.WriteString(buildHints(
+			[]string{"Ctrl+S", "ctrl+b", "Esc"},
+			[]string{"save", "back to notes", "cancel"},
+		))
+		b.WriteString(hintStyle.Render("  One decision per line — these are saved separately from your notes") + "\n")
 	}
 
 	return b.String()
@@ -492,6 +545,7 @@ func (t meetingsTab) renderStepBreadcrumb(current meetingMode) string {
 		{meetingModeAttend, "Attendees"},
 		{meetingModeTags, "Tags"},
 		{meetingModeNotes, "Notes"},
+		{meetingModeDecisions, "Decisions"},
 	}
 	sep := subtleStyle.Render(" ─ ")
 	var parts []string
@@ -516,6 +570,14 @@ func (t meetingsTab) renderMeetingDetail(m storage.Meeting) string {
 		fmt.Fprintf(&b, "**Tags:** %s\n", strings.Join(m.Tags, " "))
 	}
 	b.WriteString("\n")
+
+	if len(m.Decisions) > 0 {
+		b.WriteString("## Decisions\n\n")
+		for _, d := range m.Decisions {
+			fmt.Fprintf(&b, "- %s\n", d)
+		}
+		b.WriteString("\n")
+	}
 
 	if m.Summary != "" {
 		b.WriteString("## Summary\n\n")
@@ -634,6 +696,17 @@ func cleanAction(line string) string {
 		}
 	}
 	return cleanBullet(line)
+}
+
+func parseDecisions(s string) []string {
+	var result []string
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			result = append(result, line)
+		}
+	}
+	return result
 }
 
 func parseAttendees(s string) []string {

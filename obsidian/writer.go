@@ -64,11 +64,17 @@ func (w *Writer) Build(
 
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "# %s\n\n", today.Format("Monday, 02 January 2006"))
-
+	// YAML frontmatter — Obsidian 1.4+ renders tags from here as pills.
+	// Strip leading # so tag names are valid frontmatter values.
 	if len(allTags) > 0 {
-		fmt.Fprintf(&b, "%s\n\n", strings.Join(allTags, " "))
+		b.WriteString("---\ntags:\n")
+		for _, tag := range allTags {
+			fmt.Fprintf(&b, "  - %s\n", strings.TrimPrefix(tag, "#"))
+		}
+		b.WriteString("---\n\n")
 	}
+
+	fmt.Fprintf(&b, "# %s\n\n", today.Format("Monday, 02 January 2006"))
 
 	// Overview table
 	b.WriteString("## Overview\n\n")
@@ -173,6 +179,13 @@ func (w *Writer) Build(
 		}
 		if len(m.Tags) > 0 {
 			fmt.Fprintf(&b, "**Tags:** %s\n\n", strings.Join(m.Tags, " "))
+		}
+		if len(m.Decisions) > 0 {
+			b.WriteString("**Decisions:**\n")
+			for _, d := range m.Decisions {
+				fmt.Fprintf(&b, "- %s\n", d)
+			}
+			b.WriteString("\n")
 		}
 		if m.Summary != "" {
 			b.WriteString(m.Summary)

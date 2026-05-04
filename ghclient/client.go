@@ -54,60 +54,67 @@ func New(cfg *config.GitHubConfig) (*Client, error) {
 	return &Client{gh: ghc, cfg: cfg}, nil
 }
 
-// FetchNotifications returns all active notifications (read + unread, excluding done/muted),
-// filtered to priority repos if configured.
+// FetchNotifications returns all unread notifications filtered to priority repos if configured.
+// Paginates through all pages so the priority-repo filter sees the full inbox.
 func (c *Client) FetchNotifications(ctx context.Context) ([]Notification, error) {
-	opts := &github.NotificationListOptions{
-		All:         false, // unread only — matches GitHub's inbox default
-		ListOptions: github.ListOptions{PerPage: 50},
-	}
-
-	raw, _, err := c.gh.Activity.ListNotifications(ctx, opts)
-	if err != nil {
-		return nil, err
-	}
-
 	prioritySet := make(map[string]bool)
 	for _, r := range c.cfg.PriorityRepos {
 		prioritySet[strings.ToLower(r)] = true
 	}
 
+	opts := &github.NotificationListOptions{
+		All:         false, // unread only — matches GitHub's inbox default
+		ListOptions: github.ListOptions{PerPage: 50},
+	}
+
 	var result []Notification
-	for _, n := range raw {
-		repo := ""
-		if n.Repository != nil && n.Repository.FullName != nil {
-			repo = *n.Repository.FullName
-		}
-		if len(prioritySet) > 0 && !prioritySet[strings.ToLower(repo)] {
-			continue
+	for {
+		raw, resp, err := c.gh.Activity.ListNotifications(ctx, opts)
+		if err != nil {
+			return nil, err
 		}
 
-		notif := Notification{Repo: repo, Unread: true}
-		if n.ID != nil {
-			notif.ID = *n.ID
-		}
-		if n.Subject != nil {
-			if n.Subject.Title != nil {
-				notif.Title = *n.Subject.Title
+		for _, n := range raw {
+			repo := ""
+			if n.Repository != nil && n.Repository.FullName != nil {
+				repo = *n.Repository.FullName
 			}
-			if n.Subject.Type != nil {
-				notif.Type = *n.Subject.Type
+			if len(prioritySet) > 0 && !prioritySet[strings.ToLower(repo)] {
+				continue
 			}
-			if n.Subject.URL != nil {
-				notif.HTMLURL = apiToHTMLURL(*n.Subject.URL, c.cfg.BaseURL)
+
+			notif := Notification{Repo: repo, Unread: true}
+			if n.ID != nil {
+				notif.ID = *n.ID
 			}
-		}
-		if n.Reason != nil {
-			notif.Reason = *n.Reason
-		}
-		if n.UpdatedAt != nil {
-			notif.UpdatedAt = n.UpdatedAt.Time.Format("Jan 02 15:04")
-		}
-		if n.Unread != nil {
-			notif.Unread = *n.Unread
+			if n.Subject != nil {
+				if n.Subject.Title != nil {
+					notif.Title = *n.Subject.Title
+				}
+				if n.Subject.Type != nil {
+					notif.Type = *n.Subject.Type
+				}
+				if n.Subject.URL != nil {
+					notif.HTMLURL = apiToHTMLURL(*n.Subject.URL, c.cfg.BaseURL)
+				}
+			}
+			if n.Reason != nil {
+				notif.Reason = *n.Reason
+			}
+			if n.UpdatedAt != nil {
+				notif.UpdatedAt = n.UpdatedAt.Time.Format("Jan 02 15:04")
+			}
+			if n.Unread != nil {
+				notif.Unread = *n.Unread
+			}
+
+			result = append(result, notif)
 		}
 
-		result = append(result, notif)
+		if resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
 	}
 	return result, nil
 }

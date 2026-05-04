@@ -170,6 +170,13 @@ func buildPeriodSummary(
 					attn = " *(" + strings.Join(m.Attendees, ", ") + ")*"
 				}
 				fmt.Fprintf(&b, "**%s — %s**%s\n\n", date.Format("Jan 02"), m.Title, attn)
+				if len(m.Decisions) > 0 {
+					b.WriteString("Decisions:\n")
+					for _, d := range m.Decisions {
+						fmt.Fprintf(&b, "- %s\n", d)
+					}
+					b.WriteString("\n")
+				}
 				if m.Summary != "" {
 					b.WriteString(m.Summary)
 					b.WriteString("\n")
@@ -236,6 +243,13 @@ func buildPeriodSummary(
 			for _, m := range untaggedMeetings {
 				date, _ := time.Parse("2006-01-02", m.Date)
 				fmt.Fprintf(&b, "**%s — %s**\n\n", date.Format("Jan 02"), m.Title)
+				if len(m.Decisions) > 0 {
+					b.WriteString("Decisions:\n")
+					for _, d := range m.Decisions {
+						fmt.Fprintf(&b, "- %s\n", d)
+					}
+					b.WriteString("\n")
+				}
 				if m.Summary != "" {
 					b.WriteString(m.Summary)
 					b.WriteString("\n")
