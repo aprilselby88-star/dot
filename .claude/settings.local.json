@@ -12,7 +12,8 @@
       "Bash(xargs sed *)",
       "Bash(sed -i '' 's|mv organizer /usr/local/bin/organizer|mv dot /usr/local/bin/dot|g; s|go build -o organizer \\\\.|go build -o dot .|g; s|alias work-organizer=|alias work-dot=|g; s|ORGANIZER_CONFIG=~/work-organizer\\\\.yaml organizer|ORGANIZER_CONFIG=~/work-dot.yaml dot|g; s|^organizer$|dot|g' /Users/aprilselby/code/organizer/docs/TESTING.md)",
       "Bash(sed -i '' 's|the `organizer` binary|the `dot` binary|g; s|^organizer$|dot|g; s|\\\\./organizer|\\\\./dot|g; s|cd organizer|cd organizer  # the directory is still called organizer|g' /Users/aprilselby/code/organizer/README.md)",
-      "Bash(xargs ls *)"
+      "Bash(xargs ls *)",
+      "Bash(go get *)"
     ]
   }
 }

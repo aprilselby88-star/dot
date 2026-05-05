@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -96,6 +97,9 @@ func (t notesTab) Update(msg tea.Msg) (notesTab, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+s":
 			return t, t.saveNote()
+		case "ctrl+y":
+			_ = clipboard.WriteAll(t.area.Value())
+			return t, func() tea.Msg { return statusMsg{text: "Copied to clipboard"} }
 		case "esc":
 			if t.area.Focused() {
 				t.area.Blur()
@@ -159,7 +163,7 @@ func (t notesTab) View() string {
 	b.WriteString(boxStyle.Width(t.width-4).Render(t.area.View()) + "\n\n")
 
 	if t.area.Focused() {
-		b.WriteString(buildHints([]string{"Ctrl+S", "Esc"}, []string{"save", "unfocus"}))
+		b.WriteString(buildHints([]string{"Ctrl+S", "Ctrl+Y", "Esc"}, []string{"save", "copy all", "unfocus"}))
 	} else {
 		b.WriteString(buildHints([]string{"i / Enter"}, []string{"edit"}))
 	}

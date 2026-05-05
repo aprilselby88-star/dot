@@ -81,6 +81,7 @@ func New(cfg *config.Config) App {
 
 func (a App) Init() tea.Cmd {
 	return tea.Batch(
+		tea.EnableBracketedPaste,
 		a.github.Init(),
 		a.meetings.Init(),
 		a.todos.Init(),

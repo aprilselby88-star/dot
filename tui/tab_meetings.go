@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -322,6 +323,9 @@ func (t meetingsTab) handleNotesKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+s":
 		return t, t.saveMeeting()
+	case "ctrl+y":
+		_ = clipboard.WriteAll(t.notesArea.Value())
+		return t, func() tea.Msg { return statusMsg{text: "Notes copied to clipboard"} }
 	case "ctrl+d":
 		t.mode = meetingModeDecisions
 		t.notesArea.Blur()
@@ -357,6 +361,9 @@ func (t meetingsTab) handleDecisionsKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+s":
 		return t, t.saveMeeting()
+	case "ctrl+y":
+		_ = clipboard.WriteAll(t.decisionsArea.Value())
+		return t, func() tea.Msg { return statusMsg{text: "Decisions copied to clipboard"} }
 	case "esc":
 		t.mode = meetingModeList
 		t.decisionsArea.Blur()
@@ -475,8 +482,8 @@ func (t meetingsTab) View() string {
 		b.WriteString("\n\n")
 		b.WriteString(inputBoxFocusedStyle.Width(t.width-4).Render(t.notesArea.View()) + "\n\n")
 		b.WriteString(buildHints(
-			[]string{"Ctrl+S", "Ctrl+D", "ctrl+b", "ctrl+w", "ctrl+t", "Esc"},
-			[]string{"save", "decisions", "tags", "attendees", "title", "cancel"},
+			[]string{"Ctrl+S", "Ctrl+D", "Ctrl+Y", "ctrl+b", "Esc"},
+			[]string{"save", "decisions", "copy", "tags", "cancel"},
 		))
 		b.WriteString(hintStyle.Render("  Tip: prefix lines with Action: or - [ ] to auto-create todos") + "\n")
 
@@ -486,8 +493,8 @@ func (t meetingsTab) View() string {
 		b.WriteString("\n\n")
 		b.WriteString(inputBoxFocusedStyle.Width(t.width-4).Render(t.decisionsArea.View()) + "\n\n")
 		b.WriteString(buildHints(
-			[]string{"Ctrl+S", "ctrl+b", "Esc"},
-			[]string{"save", "back to notes", "cancel"},
+			[]string{"Ctrl+S", "Ctrl+Y", "ctrl+b", "Esc"},
+			[]string{"save", "copy", "back to notes", "cancel"},
 		))
 		b.WriteString(hintStyle.Render("  One decision per line — these are saved separately from your notes") + "\n")
 	}
