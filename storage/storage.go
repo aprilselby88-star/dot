@@ -116,6 +116,8 @@ func (s *Store) TodaysTodos() ([]TodoItem, error) {
 
 // CarryOver promotes incomplete todos from previous days into today.
 // It is idempotent: running twice will not duplicate todos.
+// A todo is considered complete if any version of it (original or any
+// carried copy) has been marked done — it will not be carried forward.
 // Returns the count of newly added items.
 func (s *Store) CarryOver() (int, error) {
 	all, err := s.LoadTodos()
@@ -124,26 +126,43 @@ func (s *Store) CarryOver() (int, error) {
 	}
 	today := time.Now().Format("2006-01-02")
 
-	// Track already-carried items by "text|originalDate"
+	// Build a key for each todo: "text|originalDate".
+	todoKey := func(t TodoItem) string {
+		orig := t.Date
+		if t.CarriedFrom != "" {
+			orig = t.CarriedFrom
+		}
+		return t.Text + "|" + orig
+	}
+
+	// Any version marked done means the whole chain is done — don't carry.
+	doneKeys := map[string]bool{}
+	for _, t := range all {
+		if t.Done {
+			doneKeys[todoKey(t)] = true
+		}
+	}
+
+	// Track items already carried into today so we stay idempotent.
 	existing := map[string]bool{}
 	for _, t := range all {
 		if t.Date == today && t.CarriedFrom != "" {
-			existing[t.Text+"|"+t.CarriedFrom] = true
+			existing[todoKey(t)] = true
 		}
 	}
 
 	var toAdd []TodoItem
 	for _, t := range all {
-		if t.Date >= today || t.Done {
+		if t.Date >= today {
+			continue
+		}
+		key := todoKey(t)
+		if doneKeys[key] || existing[key] {
 			continue
 		}
 		orig := t.Date
 		if t.CarriedFrom != "" {
 			orig = t.CarriedFrom
-		}
-		key := t.Text + "|" + orig
-		if existing[key] {
-			continue
 		}
 		toAdd = append(toAdd, TodoItem{
 			ID:          newID(),

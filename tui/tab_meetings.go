@@ -132,6 +132,15 @@ func (t meetingsTab) Update(msg tea.Msg) (meetingsTab, tea.Cmd) {
 
 	case meetingSavedMsg:
 		if msg.err == nil {
+			t.mode = meetingModeList
+			t.titleInput.SetValue("")
+			t.titleInput.Blur()
+			t.attendInput.SetValue("")
+			t.tagsInput.SetValue("")
+			t.notesArea.SetValue("")
+			t.notesArea.Blur()
+			t.decisionsArea.SetValue("")
+			t.decisionsArea.Blur()
 			return t, tea.Batch(
 				t.loadMeetings(),
 				func() tea.Msg { return statusMsg{text: "Meeting saved"} },
