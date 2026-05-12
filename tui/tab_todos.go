@@ -48,10 +48,11 @@ type todosTab struct {
 	width  int
 	height int
 
-	mode   todoMode
-	todos  []storage.TodoItem
-	cursor int
-	loaded bool
+	mode         todoMode
+	todos        []storage.TodoItem
+	cursor       int
+	scrollOffset int
+	loaded       bool
 
 	input    textinput.Model
 	tagInput textinput.Model
@@ -100,6 +101,10 @@ func (t todosTab) Update(msg tea.Msg) (todosTab, tea.Cmd) {
 			wasLoaded := t.loaded
 			t.todos = msg.todos
 			t.loaded = true
+			if len(t.todos) > 0 && t.cursor >= len(t.todos) {
+				t.cursor = len(t.todos) - 1
+			}
+			t.clampScroll()
 			if !wasLoaded {
 				return t, t.carryOver()
 			}
@@ -124,7 +129,7 @@ func (t todosTab) Update(msg tea.Msg) (todosTab, tea.Cmd) {
 		var cmd tea.Cmd
 		switch t.mode {
 		case todoModeList:
-			cmd = t.handleListKey(msg)
+			t, cmd = t.handleListKey(msg)
 			return t, cmd
 		case todoModeAdd, todoModeEditText:
 			t, cmd = t.handleInputKey(msg)
@@ -156,24 +161,31 @@ func (t todosTab) Update(msg tea.Msg) (todosTab, tea.Cmd) {
 	return t, tea.Batch(cmds...)
 }
 
-func (t *todosTab) handleListKey(msg tea.KeyMsg) tea.Cmd {
+func (t todosTab) handleListKey(msg tea.KeyMsg) (todosTab, tea.Cmd) {
+	rows := t.visibleRows()
 	switch msg.String() {
 	case "j", "down":
 		if t.cursor < len(t.todos)-1 {
 			t.cursor++
+			if t.cursor >= t.scrollOffset+rows {
+				t.scrollOffset = t.cursor - rows + 1
+			}
 		}
 	case "k", "up":
 		if t.cursor > 0 {
 			t.cursor--
+			if t.cursor < t.scrollOffset {
+				t.scrollOffset = t.cursor
+			}
 		}
 	case t.cfg.Hotkeys.NewItem:
 		t.mode = todoModeAdd
 		t.input.SetValue("")
 		t.input.Focus()
-		return textinput.Blink
+		return t, textinput.Blink
 	case " ", "enter":
 		if len(t.todos) > 0 {
-			return t.toggleTodo(t.cursor)
+			return t, t.toggleTodo(t.cursor)
 		}
 	case "e":
 		if len(t.todos) > 0 {
@@ -181,16 +193,37 @@ func (t *todosTab) handleListKey(msg tea.KeyMsg) tea.Cmd {
 			t.editID = t.todos[t.cursor].ID
 			t.input.SetValue(t.todos[t.cursor].Text)
 			t.input.Focus()
-			return textinput.Blink
+			return t, textinput.Blink
 		}
 	case t.cfg.Hotkeys.Delete:
 		if len(t.todos) > 0 {
-			return t.deleteTodo(t.cursor)
+			return t, t.deleteTodo(t.cursor)
 		}
 	case t.cfg.Hotkeys.Refresh:
-		return t.loadTodos()
+		return t, t.loadTodos()
 	}
-	return nil
+	return t, nil
+}
+
+func (t todosTab) visibleRows() int {
+	r := t.height - 7
+	if r < 1 {
+		return 10
+	}
+	return r
+}
+
+func (t *todosTab) clampScroll() {
+	rows := t.visibleRows()
+	if t.scrollOffset > t.cursor {
+		t.scrollOffset = t.cursor
+	}
+	if t.scrollOffset+rows <= t.cursor {
+		t.scrollOffset = t.cursor - rows + 1
+	}
+	if t.scrollOffset < 0 {
+		t.scrollOffset = 0
+	}
 }
 
 func (t todosTab) handleInputKey(msg tea.KeyMsg) (todosTab, tea.Cmd) {
@@ -407,16 +440,19 @@ func (t todosTab) View() string {
 		return b.String()
 	}
 
-	maxRows := t.height - 7
-	if maxRows < 1 {
-		maxRows = 10
+	maxRows := t.visibleRows()
+	start := t.scrollOffset
+	end := start + maxRows
+	if end > total {
+		end = total
 	}
 
-	for i, todo := range t.todos {
-		if i >= maxRows {
-			b.WriteString("  " + mutedStyle.Render(fmt.Sprintf("… %d more", total-maxRows)) + "\n")
-			break
-		}
+	if start > 0 {
+		b.WriteString("  " + mutedStyle.Render(fmt.Sprintf("↑ %d above", start)) + "\n")
+	}
+
+	for i := start; i < end; i++ {
+		todo := t.todos[i]
 
 		cursor := "  "
 		if i == t.cursor {
@@ -467,6 +503,10 @@ func (t todosTab) View() string {
 		}
 
 		b.WriteString(line + "\n")
+	}
+
+	if end < total {
+		b.WriteString("  " + mutedStyle.Render(fmt.Sprintf("↓ %d below", total-end)) + "\n")
 	}
 
 	b.WriteString("\n")
