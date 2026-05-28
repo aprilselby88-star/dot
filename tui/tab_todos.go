@@ -290,7 +290,7 @@ func (t todosTab) addTodo(text string, tags []string) tea.Cmd {
 		all, _ := t.store.LoadTodos()
 		now := time.Now()
 		all = append(all, storage.TodoItem{
-			ID:   fmt.Sprintf("%d", now.UnixNano()),
+			ID:   storage.NewID(),
 			Text: text,
 			Date: now.Format("2006-01-02"),
 			Tags: tags,

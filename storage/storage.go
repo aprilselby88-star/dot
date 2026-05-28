@@ -7,8 +7,13 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 )
+
+// idCounter disambiguates IDs generated within the same nanosecond,
+// since time.Now().UnixNano() has coarse resolution on some platforms (notably macOS).
+var idCounter uint64
 
 // TodoItem is a single task that can carry forward across days.
 type TodoItem struct {
@@ -124,6 +129,7 @@ func (s *Store) CarryOver() (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	all, healed := healDuplicateIDs(all)
 	today := time.Now().Format("2006-01-02")
 
 	// Build a key for each todo: "text|originalDate".
@@ -165,7 +171,7 @@ func (s *Store) CarryOver() (int, error) {
 			orig = t.CarriedFrom
 		}
 		toAdd = append(toAdd, TodoItem{
-			ID:          newID(),
+			ID:          NewID(),
 			Text:        t.Text,
 			Date:        today,
 			CarriedFrom: orig,
@@ -174,13 +180,30 @@ func (s *Store) CarryOver() (int, error) {
 		existing[key] = true
 	}
 
-	if len(toAdd) > 0 {
+	if len(toAdd) > 0 || healed {
 		all = append(all, toAdd...)
 		if err := s.SaveTodos(all); err != nil {
 			return 0, err
 		}
 	}
 	return len(toAdd), nil
+}
+
+// healDuplicateIDs assigns a fresh ID to any todo whose ID collides with one
+// that appears earlier in the slice. Returns the (possibly modified) slice
+// and whether any IDs were rewritten. Older buggy data may have collisions
+// produced by the previous newID() implementation.
+func healDuplicateIDs(items []TodoItem) ([]TodoItem, bool) {
+	seen := map[string]bool{}
+	changed := false
+	for i, item := range items {
+		if seen[item.ID] {
+			items[i].ID = NewID()
+			changed = true
+		}
+		seen[items[i].ID] = true
+	}
+	return items, changed
 }
 
 // ---- Meetings ----
@@ -552,6 +575,7 @@ func (s *Store) save(name string, v any) error {
 	return os.WriteFile(filepath.Join(s.dir, name), data, 0600)
 }
 
-func newID() string {
-	return fmt.Sprintf("%d", time.Now().UnixNano())
+// NewID returns a unique ID even when called many times within the same nanosecond.
+func NewID() string {
+	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), atomic.AddUint64(&idCounter, 1))
 }

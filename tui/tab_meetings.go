@@ -397,7 +397,7 @@ func (t meetingsTab) saveMeeting() tea.Cmd {
 	decisions := parseDecisions(t.decisionsArea.Value())
 	summary := summarizeMeeting(raw)
 	actions := extractActions(raw)
-	meetingID := fmt.Sprintf("%d", time.Now().UnixNano())
+	meetingID := storage.NewID()
 
 	m := storage.Meeting{
 		ID:        meetingID,
@@ -418,10 +418,9 @@ func (t meetingsTab) saveMeeting() tea.Cmd {
 		if len(actions) > 0 {
 			all, _ := t.store.LoadTodos()
 			today := time.Now().Format("2006-01-02")
-			base := time.Now().UnixNano()
-			for i, action := range actions {
+			for _, action := range actions {
 				all = append(all, storage.TodoItem{
-					ID:                 fmt.Sprintf("%d", base+int64(i+1)),
+					ID:                 storage.NewID(),
 					Text:               action,
 					Date:               today,
 					SourceMeetingID:    meetingID,
