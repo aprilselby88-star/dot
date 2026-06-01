@@ -14,7 +14,10 @@
       "Bash(sed -i '' 's|the `organizer` binary|the `dot` binary|g; s|^organizer$|dot|g; s|\\\\./organizer|\\\\./dot|g; s|cd organizer|cd organizer  # the directory is still called organizer|g' /Users/aprilselby/code/organizer/README.md)",
       "Bash(xargs ls *)",
       "Bash(go get *)",
-      "Bash(go test *)"
+      "Bash(go test *)",
+      "Bash(find ~/go /Users/aprilselby/code/dot -path \"*/bubbles/textarea/textarea.go\" 2>/dev/null | head -3)",
+      "Read(//Users/aprilselby/go/**)",
+      "Bash(go env *)"
     ]
   }
 }

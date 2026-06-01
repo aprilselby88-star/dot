@@ -61,6 +61,7 @@ type meetingsTab struct {
 	vp viewport.Model
 
 	formDate string // date being created
+	saving   bool   // true while a save is in-flight; blocks duplicate ctrl+s
 
 	availableTags []string
 	tagSuggestIdx int
@@ -82,10 +83,14 @@ func newMeetingsTab(cfg *config.Config, store *storage.Store) meetingsTab {
 	ta := textarea.New()
 	ta.Placeholder = "Dump your raw meeting notes here…\n\nTip: prefix lines with 'Action:' or '- [ ]' to auto-create todos."
 	ta.ShowLineNumbers = false
+	ta.CharLimit = 0
+	ta.MaxHeight = 0 // unbounded line count — scrolls inside the visible viewport
 
 	da := textarea.New()
 	da.Placeholder = "One decision per line…\n\nExample:\nWe will migrate to PostgreSQL by Q3\n@alice owns the auth refactor"
 	da.ShowLineNumbers = false
+	da.CharLimit = 0
+	da.MaxHeight = 0
 
 	return meetingsTab{
 		cfg:           cfg,
@@ -110,10 +115,16 @@ func (t meetingsTab) Init() tea.Cmd {
 
 func (t meetingsTab) UpdateSize(w, h int) (meetingsTab, tea.Cmd) {
 	t.width, t.height = w, h
+	// Chrome around the textarea (breadcrumb, label, border, hints) totals ~7 rows.
+	// Reserve that and hand the rest to the textarea so long notes scroll inside it.
+	areaH := h - 7
+	if areaH < 3 {
+		areaH = 3
+	}
 	t.notesArea.SetWidth(w - 4)
-	t.notesArea.SetHeight(h - 10)
+	t.notesArea.SetHeight(areaH)
 	t.decisionsArea.SetWidth(w - 4)
-	t.decisionsArea.SetHeight(h - 10)
+	t.decisionsArea.SetHeight(areaH)
 	t.vp.Width = w
 	t.vp.Height = h - 4
 	return t, nil
@@ -131,6 +142,7 @@ func (t meetingsTab) Update(msg tea.Msg) (meetingsTab, tea.Cmd) {
 		return t, nil
 
 	case meetingSavedMsg:
+		t.saving = false
 		if msg.err == nil {
 			t.mode = meetingModeList
 			t.titleInput.SetValue("")
@@ -331,6 +343,10 @@ func (t meetingsTab) handleTagsKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
 func (t meetingsTab) handleNotesKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+s":
+		if t.saving {
+			return t, nil
+		}
+		t.saving = true
 		return t, t.saveMeeting()
 	case "ctrl+y":
 		_ = clipboard.WriteAll(t.notesArea.Value())
@@ -369,6 +385,10 @@ func (t meetingsTab) handleNotesKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
 func (t meetingsTab) handleDecisionsKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+s":
+		if t.saving {
+			return t, nil
+		}
+		t.saving = true
 		return t, t.saveMeeting()
 	case "ctrl+y":
 		_ = clipboard.WriteAll(t.decisionsArea.Value())
@@ -482,29 +502,27 @@ func (t meetingsTab) View() string {
 		b.WriteString(buildHints([]string{"Enter", "Tab", "ctrl+b", "ctrl+t", "Esc"}, []string{"next", "complete", "back", "title", "cancel"}))
 
 	case meetingModeNotes:
-		b.WriteString("\n  " + t.renderStepBreadcrumb(meetingModeNotes) + "\n\n")
+		b.WriteString("  " + t.renderStepBreadcrumb(meetingModeNotes) + "\n")
 		b.WriteString(inputLabelStyle.Render("  Notes") + "  " + mutedStyle.Render(t.titleInput.Value()))
 		if t.attendInput.Value() != "" {
 			b.WriteString(subtleStyle.Render("  ·  " + t.attendInput.Value()))
 		}
-		b.WriteString("\n\n")
-		b.WriteString(inputBoxFocusedStyle.Width(t.width-4).Render(t.notesArea.View()) + "\n\n")
+		b.WriteString("\n")
+		b.WriteString(inputBoxFocusedStyle.Width(t.width-4).Render(t.notesArea.View()) + "\n")
 		b.WriteString(buildHints(
 			[]string{"Ctrl+S", "Ctrl+D", "Ctrl+Y", "ctrl+b", "Esc"},
 			[]string{"save", "decisions", "copy", "tags", "cancel"},
 		))
-		b.WriteString(hintStyle.Render("  Tip: prefix lines with Action: or - [ ] to auto-create todos") + "\n")
 
 	case meetingModeDecisions:
-		b.WriteString("\n  " + t.renderStepBreadcrumb(meetingModeDecisions) + "\n\n")
+		b.WriteString("  " + t.renderStepBreadcrumb(meetingModeDecisions) + "\n")
 		b.WriteString(inputLabelStyle.Render("  Decisions") + "  " + mutedStyle.Render(t.titleInput.Value()))
-		b.WriteString("\n\n")
-		b.WriteString(inputBoxFocusedStyle.Width(t.width-4).Render(t.decisionsArea.View()) + "\n\n")
+		b.WriteString("\n")
+		b.WriteString(inputBoxFocusedStyle.Width(t.width-4).Render(t.decisionsArea.View()) + "\n")
 		b.WriteString(buildHints(
 			[]string{"Ctrl+S", "Ctrl+Y", "ctrl+b", "Esc"},
 			[]string{"save", "copy", "back to notes", "cancel"},
 		))
-		b.WriteString(hintStyle.Render("  One decision per line — these are saved separately from your notes") + "\n")
 	}
 
 	return b.String()
