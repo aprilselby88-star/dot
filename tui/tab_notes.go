@@ -22,6 +22,16 @@ type noteLoadedMsg struct {
 
 type noteSavedMsg struct{ err error }
 
+type notesAutosaveTickMsg struct{}
+
+const notesAutosaveInterval = 2 * time.Minute
+
+func notesAutosaveTick() tea.Cmd {
+	return tea.Tick(notesAutosaveInterval, func(time.Time) tea.Msg {
+		return notesAutosaveTickMsg{}
+	})
+}
+
 // ---- model ----
 
 type notesTab struct {
@@ -60,7 +70,7 @@ func newNotesTab(cfg *config.Config, store *storage.Store) notesTab {
 func (t notesTab) Editing() bool { return t.area.Focused() }
 
 func (t notesTab) Init() tea.Cmd {
-	return t.loadNote()
+	return tea.Batch(t.loadNote(), notesAutosaveTick())
 }
 
 func (t notesTab) UpdateSize(w, h int) (notesTab, tea.Cmd) {
@@ -92,6 +102,12 @@ func (t notesTab) Update(msg tea.Msg) (notesTab, tea.Cmd) {
 			}
 			return statusMsg{text: "Notes saved"}
 		}
+
+	case notesAutosaveTickMsg:
+		if t.dirty {
+			return t, tea.Batch(t.saveNote(), notesAutosaveTick())
+		}
+		return t, notesAutosaveTick()
 
 	case tea.KeyMsg:
 		switch msg.String() {

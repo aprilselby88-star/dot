@@ -128,14 +128,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "q":
 				return a, tea.Quit
 			case a.cfg.Hotkeys.TabGitHub:
+				cmd := a.saveNotesIfLeaving(tabGitHub)
 				a.active = tabGitHub
-				return a, nil
+				return a, cmd
 			case a.cfg.Hotkeys.TabMeetings:
+				cmd := a.saveNotesIfLeaving(tabMeetings)
 				a.active = tabMeetings
-				return a, nil
+				return a, cmd
 			case a.cfg.Hotkeys.TabTodos:
+				cmd := a.saveNotesIfLeaving(tabTodos)
 				a.active = tabTodos
-				return a, nil
+				return a, cmd
 			case a.cfg.Hotkeys.TabNotes:
 				a.active = tabNotes
 				return a, nil
@@ -313,6 +316,15 @@ func (a App) checkSummaries() tea.Cmd {
 
 		return summaryGeneratedMsg{paths: paths}
 	}
+}
+
+// saveNotesIfLeaving returns a save command when the user is switching away
+// from the notes tab with unsaved changes.
+func (a App) saveNotesIfLeaving(next tabID) tea.Cmd {
+	if a.active == tabNotes && next != tabNotes && a.notes.dirty {
+		return a.notes.saveNote()
+	}
+	return nil
 }
 
 func (a App) isEditing() bool {
