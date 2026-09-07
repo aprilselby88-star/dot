@@ -22,7 +22,20 @@ type meetingsLoadedMsg struct {
 	meetings []storage.Meeting
 	err      error
 }
-type meetingSavedMsg struct{ err error }
+type meetingSavedMsg struct {
+	err      error
+	autosave bool // true when triggered by the timer, not an explicit save
+}
+
+type meetingAutosaveTickMsg struct{}
+
+const meetingAutosaveInterval = 2 * time.Minute
+
+func meetingAutosaveTick() tea.Cmd {
+	return tea.Tick(meetingAutosaveInterval, func(time.Time) tea.Msg {
+		return meetingAutosaveTickMsg{}
+	})
+}
 
 // ---- meeting form mode ----
 
@@ -60,8 +73,10 @@ type meetingsTab struct {
 	// view pane
 	vp viewport.Model
 
-	formDate string // date being created
-	saving   bool   // true while a save is in-flight; blocks duplicate ctrl+s
+	formDate  string // date being created
+	currentID string // stable ID of the meeting being composed; keeps autosaves upserting one record
+	dirty     bool   // unsaved edits since the last save
+	saving    bool   // true while a save is in-flight; blocks duplicate ctrl+s
 
 	availableTags []string
 	tagSuggestIdx int
@@ -110,7 +125,7 @@ func (t meetingsTab) Editing() bool {
 }
 
 func (t meetingsTab) Init() tea.Cmd {
-	return tea.Batch(t.loadMeetings(), t.loadAllTags())
+	return tea.Batch(t.loadMeetings(), t.loadAllTags(), meetingAutosaveTick())
 }
 
 func (t meetingsTab) UpdateSize(w, h int) (meetingsTab, tea.Cmd) {
@@ -143,22 +158,35 @@ func (t meetingsTab) Update(msg tea.Msg) (meetingsTab, tea.Cmd) {
 
 	case meetingSavedMsg:
 		t.saving = false
-		if msg.err == nil {
-			t.mode = meetingModeList
-			t.titleInput.SetValue("")
-			t.titleInput.Blur()
-			t.attendInput.SetValue("")
-			t.tagsInput.SetValue("")
-			t.notesArea.SetValue("")
-			t.notesArea.Blur()
-			t.decisionsArea.SetValue("")
-			t.decisionsArea.Blur()
-			return t, tea.Batch(
-				t.loadMeetings(),
-				func() tea.Msg { return statusMsg{text: "Meeting saved"} },
-			)
+		if msg.err != nil {
+			return t, func() tea.Msg { return statusMsg{text: msg.err.Error(), isError: true} }
 		}
-		return t, func() tea.Msg { return statusMsg{text: msg.err.Error(), isError: true} }
+		t.dirty = false
+		if msg.autosave {
+			// Keep the user in the form; just persist quietly in the background.
+			return t, func() tea.Msg { return statusMsg{text: "Meeting autosaved"} }
+		}
+		t.mode = meetingModeList
+		t.currentID = ""
+		t.titleInput.SetValue("")
+		t.titleInput.Blur()
+		t.attendInput.SetValue("")
+		t.tagsInput.SetValue("")
+		t.notesArea.SetValue("")
+		t.notesArea.Blur()
+		t.decisionsArea.SetValue("")
+		t.decisionsArea.Blur()
+		return t, tea.Batch(
+			t.loadMeetings(),
+			func() tea.Msg { return statusMsg{text: "Meeting saved"} },
+		)
+
+	case meetingAutosaveTickMsg:
+		if t.Editing() && t.dirty && !t.saving && strings.TrimSpace(t.titleInput.Value()) != "" {
+			t.saving = true
+			return t, tea.Batch(t.saveMeeting(true), meetingAutosaveTick())
+		}
+		return t, meetingAutosaveTick()
 
 	case allTagsLoadedMsg:
 		if msg.err == nil {
@@ -235,7 +263,15 @@ func (t *meetingsTab) handleListKey(msg tea.KeyMsg) tea.Cmd {
 	case t.cfg.Hotkeys.NewItem:
 		t.mode = meetingModeTitle
 		t.formDate = time.Now().Format("2006-01-02")
+		t.currentID = storage.NewID()
+		t.dirty = false
+		// Start every field blank; later steps no longer clear on entry so that
+		// back-and-forth navigation (ctrl+b) and autosave re-entry keep their data.
 		t.titleInput.SetValue("")
+		t.attendInput.SetValue("")
+		t.tagsInput.SetValue("")
+		t.notesArea.SetValue("")
+		t.decisionsArea.SetValue("")
 		t.titleInput.Focus()
 		return textinput.Blink
 	case t.cfg.Hotkeys.Delete, "d":
@@ -267,15 +303,18 @@ func (t meetingsTab) handleTitleKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
 		if strings.TrimSpace(t.titleInput.Value()) != "" {
 			t.mode = meetingModeAttend
 			t.titleInput.Blur()
-			t.attendInput.SetValue("")
 			t.attendInput.Focus()
 			return t, textinput.Blink
 		}
 	case "esc":
+		if cmd := t.exitCmd(); cmd != nil {
+			return t, cmd
+		}
 		t.mode = meetingModeList
 		t.titleInput.Blur()
 		return t, nil
 	}
+	t.dirty = true
 	var cmd tea.Cmd
 	t.titleInput, cmd = t.titleInput.Update(msg)
 	return t, cmd
@@ -286,11 +325,13 @@ func (t meetingsTab) handleAttendKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
 	case "enter":
 		t.mode = meetingModeTags
 		t.attendInput.Blur()
-		t.tagsInput.SetValue("")
 		t.tagSuggestIdx = 0
 		t.tagsInput.Focus()
 		return t, tea.Batch(textinput.Blink, t.loadAllTags())
 	case "esc":
+		if cmd := t.exitCmd(); cmd != nil {
+			return t, cmd
+		}
 		t.mode = meetingModeList
 		t.attendInput.Blur()
 		return t, nil
@@ -300,6 +341,7 @@ func (t meetingsTab) handleAttendKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
 		t.titleInput.Focus()
 		return t, textinput.Blink
 	}
+	t.dirty = true
 	var cmd tea.Cmd
 	t.attendInput, cmd = t.attendInput.Update(msg)
 	return t, cmd
@@ -310,10 +352,12 @@ func (t meetingsTab) handleTagsKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
 	case "enter":
 		t.mode = meetingModeNotes
 		t.tagsInput.Blur()
-		t.notesArea.SetValue("")
 		t.notesArea.Focus()
 		return t, textarea.Blink
 	case "esc":
+		if cmd := t.exitCmd(); cmd != nil {
+			return t, cmd
+		}
 		t.mode = meetingModeList
 		t.tagsInput.Blur()
 		return t, nil
@@ -331,10 +375,12 @@ func (t meetingsTab) handleTagsKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
 		newVal := tagComplete(t.tagsInput.Value(), t.availableTags, t.tagSuggestIdx)
 		t.tagsInput.SetValue(newVal)
 		t.tagSuggestIdx++
+		t.dirty = true
 		return t, textinput.Blink
 	default:
 		t.tagSuggestIdx = 0
 	}
+	t.dirty = true
 	var cmd tea.Cmd
 	t.tagsInput, cmd = t.tagsInput.Update(msg)
 	return t, cmd
@@ -347,17 +393,19 @@ func (t meetingsTab) handleNotesKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
 			return t, nil
 		}
 		t.saving = true
-		return t, t.saveMeeting()
+		return t, t.saveMeeting(false)
 	case "ctrl+y":
 		_ = clipboard.WriteAll(t.notesArea.Value())
 		return t, func() tea.Msg { return statusMsg{text: "Notes copied to clipboard"} }
 	case "ctrl+d":
 		t.mode = meetingModeDecisions
 		t.notesArea.Blur()
-		t.decisionsArea.SetValue("")
 		t.decisionsArea.Focus()
 		return t, textarea.Blink
 	case "esc":
+		if cmd := t.exitCmd(); cmd != nil {
+			return t, cmd
+		}
 		t.mode = meetingModeList
 		t.notesArea.Blur()
 		return t, nil
@@ -377,6 +425,7 @@ func (t meetingsTab) handleNotesKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
 		t.titleInput.Focus()
 		return t, textinput.Blink
 	}
+	t.dirty = true
 	var cmd tea.Cmd
 	t.notesArea, cmd = t.notesArea.Update(msg)
 	return t, cmd
@@ -389,11 +438,14 @@ func (t meetingsTab) handleDecisionsKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
 			return t, nil
 		}
 		t.saving = true
-		return t, t.saveMeeting()
+		return t, t.saveMeeting(false)
 	case "ctrl+y":
 		_ = clipboard.WriteAll(t.decisionsArea.Value())
 		return t, func() tea.Msg { return statusMsg{text: "Decisions copied to clipboard"} }
 	case "esc":
+		if cmd := t.exitCmd(); cmd != nil {
+			return t, cmd
+		}
 		t.mode = meetingModeList
 		t.decisionsArea.Blur()
 		return t, nil
@@ -403,13 +455,26 @@ func (t meetingsTab) handleDecisionsKey(msg tea.KeyMsg) (meetingsTab, tea.Cmd) {
 		t.notesArea.Focus()
 		return t, textarea.Blink
 	}
+	t.dirty = true
 	var cmd tea.Cmd
 	t.decisionsArea, cmd = t.decisionsArea.Update(msg)
 	return t, cmd
 }
 
+// exitCmd flushes a final save when the in-progress meeting has a title and
+// unsaved edits, so backing out of the form (Esc) never discards work. It
+// returns nil when there is nothing worth saving, meaning a plain cancel.
+func (t *meetingsTab) exitCmd() tea.Cmd {
+	if !t.saving && t.dirty && strings.TrimSpace(t.titleInput.Value()) != "" {
+		t.saving = true
+		return t.saveMeeting(false)
+	}
+	return nil
+}
+
 // saveMeeting saves the meeting and auto-creates todos from any action items found in the notes.
-func (t meetingsTab) saveMeeting() tea.Cmd {
+// autosave marks a timer-triggered save, which keeps the user in the form instead of resetting it.
+func (t meetingsTab) saveMeeting(autosave bool) tea.Cmd {
 	title := strings.TrimSpace(t.titleInput.Value())
 	raw := strings.TrimSpace(t.notesArea.Value())
 	attendees := parseAttendees(t.attendInput.Value())
@@ -417,7 +482,10 @@ func (t meetingsTab) saveMeeting() tea.Cmd {
 	decisions := parseDecisions(t.decisionsArea.Value())
 	summary := summarizeMeeting(raw)
 	actions := extractActions(raw)
-	meetingID := storage.NewID()
+	meetingID := t.currentID
+	if meetingID == "" {
+		meetingID = storage.NewID()
+	}
 
 	m := storage.Meeting{
 		ID:        meetingID,
@@ -433,12 +501,24 @@ func (t meetingsTab) saveMeeting() tea.Cmd {
 	return func() tea.Msg {
 		err := t.store.SaveMeeting(m)
 		if err != nil {
-			return meetingSavedMsg{err: err}
+			return meetingSavedMsg{err: err, autosave: autosave}
 		}
 		if len(actions) > 0 {
 			all, _ := t.store.LoadTodos()
+			// Only add action items we haven't already created for this meeting,
+			// so repeated (auto)saves never duplicate todos or resurrect completed ones.
+			existing := make(map[string]bool)
+			for _, td := range all {
+				if td.SourceMeetingID == meetingID {
+					existing[td.Text] = true
+				}
+			}
 			today := time.Now().Format("2006-01-02")
+			added := false
 			for _, action := range actions {
+				if existing[action] {
+					continue
+				}
 				all = append(all, storage.TodoItem{
 					ID:                 storage.NewID(),
 					Text:               action,
@@ -446,10 +526,14 @@ func (t meetingsTab) saveMeeting() tea.Cmd {
 					SourceMeetingID:    meetingID,
 					SourceMeetingTitle: title,
 				})
+				existing[action] = true
+				added = true
 			}
-			_ = t.store.SaveTodos(all)
+			if added {
+				_ = t.store.SaveTodos(all)
+			}
 		}
-		return meetingSavedMsg{err: nil}
+		return meetingSavedMsg{err: nil, autosave: autosave}
 	}
 }
 
@@ -511,7 +595,7 @@ func (t meetingsTab) View() string {
 		b.WriteString(inputBoxFocusedStyle.Width(t.width-4).Render(t.notesArea.View()) + "\n")
 		b.WriteString(buildHints(
 			[]string{"Ctrl+S", "Ctrl+D", "Ctrl+Y", "ctrl+b", "Esc"},
-			[]string{"save", "decisions", "copy", "tags", "cancel"},
+			[]string{"save", "decisions", "copy", "tags", "save & close"},
 		))
 
 	case meetingModeDecisions:
@@ -521,7 +605,7 @@ func (t meetingsTab) View() string {
 		b.WriteString(inputBoxFocusedStyle.Width(t.width-4).Render(t.decisionsArea.View()) + "\n")
 		b.WriteString(buildHints(
 			[]string{"Ctrl+S", "Ctrl+Y", "ctrl+b", "Esc"},
-			[]string{"save", "copy", "back to notes", "cancel"},
+			[]string{"save", "copy", "back to notes", "save & close"},
 		))
 	}
 
