@@ -34,13 +34,46 @@ storage:
   # Where organizer stores todos, meetings, notes, tracked PRs (JSON files)
   dir: "~/.local/share/organizer"
 
+jira:
+  # Ticket creation shells out to the Atlassian CLI (acli), so `acli` must be on PATH.
+  # Auth uses acli's own login. Either run `acli jira auth login` yourself once, or
+  # fill site/email/token below and dot will log acli in for you when a token is set.
+  site:  "mysite.atlassian.net"  # your Atlassian site, no https://
+  email: "you@company.com"       # acli login email
+
+  # API token — or leave blank and set JIRA_API_TOKEN (or DOT_JIRA_TOKEN) env var.
+  # If blank, dot relies on an existing `acli jira auth login` session.
+  token: ""
+
+  project_key: "PROJ"
+  issue_type:  "Task"            # case-sensitive, e.g. Task, Story, Bug, Epic
+  assignee:    "you@company.com" # email or accountId; "@me" also works
+  reporter:    ""                # optional
+
+  # Prefilled as the parentIssueId when you start a new ticket (still editable).
+  default_parent: ""
+
+  # Optional labels applied to every ticket
+  labels: []
+
+  # Custom field the Acceptance Criteria text is written into (leave blank to skip AC).
+  acceptance_criteria_field: ""  # e.g. customfield_10050
+
+  # Reporting custom fields, written into acli's additionalAttributes verbatim.
+  # The value shape must match the Jira field type: a plain string/number, or an
+  # option object like { value: "..." }. Uncomment and edit for your org:
+  custom_fields: {}
+  #   customfield_10001: { value: "Team Rocket" }
+  #   customfield_10002: "some string"
+  #   customfield_10003: 50
+
 hotkeys:
   # Tab switching — these work ONLY when not in a text input
   tab_github:   "1"
   tab_meetings: "2"
   tab_todos:    "3"
   tab_notes:    "4"
-  tab_summary:  "5"
+  tab_jira:     "5"
 
   # Actions (context-sensitive)
   new_item:     "n"

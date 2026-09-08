@@ -10,6 +10,7 @@ import (
 
 	"github.com/aprilselby/dot/config"
 	"github.com/aprilselby/dot/ghclient"
+	"github.com/aprilselby/dot/jira"
 	"github.com/aprilselby/dot/obsidian"
 	"github.com/aprilselby/dot/storage"
 )
@@ -21,6 +22,7 @@ const (
 	tabMeetings
 	tabTodos
 	tabNotes
+	tabJira
 )
 
 // statusMsg sets a temporary message in the status bar.
@@ -50,6 +52,7 @@ type App struct {
 	meetings meetingsTab
 	todos    todosTab
 	notes    notesTab
+	jira     jiraTab
 
 	width  int
 	height int
@@ -66,6 +69,9 @@ func New(cfg *config.Config) App {
 		ghc, _ = ghclient.New(&cfg.GitHub)
 	}
 
+	// jc is nil when Jira isn't configured or acli is missing; the tab handles that.
+	jc, _ := jira.New(&cfg.Jira)
+
 	a := App{
 		cfg:   cfg,
 		store: store,
@@ -76,6 +82,7 @@ func New(cfg *config.Config) App {
 	a.meetings = newMeetingsTab(cfg, store)
 	a.todos = newTodosTab(cfg, store)
 	a.notes = newNotesTab(cfg, store)
+	a.jira = newJiraTab(cfg, jc)
 	return a
 }
 
@@ -86,6 +93,7 @@ func (a App) Init() tea.Cmd {
 		a.meetings.Init(),
 		a.todos.Init(),
 		a.notes.Init(),
+		a.jira.Init(),
 		a.checkSummaries(),
 	)
 }
@@ -106,6 +114,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.todos, cmd = a.todos.UpdateSize(msg.Width, contentH)
 		cmds = append(cmds, cmd)
 		a.notes, cmd = a.notes.UpdateSize(msg.Width, contentH)
+		cmds = append(cmds, cmd)
+		a.jira, cmd = a.jira.UpdateSize(msg.Width, contentH)
 		cmds = append(cmds, cmd)
 		return a, tea.Batch(cmds...)
 
@@ -142,6 +152,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case a.cfg.Hotkeys.TabNotes:
 				a.active = tabNotes
 				return a, nil
+			case a.cfg.Hotkeys.TabJira:
+				cmd := a.saveNotesIfLeaving(tabJira)
+				a.active = tabJira
+				return a, cmd
 			}
 		}
 
@@ -156,6 +170,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.todos, cmd = a.todos.Update(msg)
 		case tabNotes:
 			a.notes, cmd = a.notes.Update(msg)
+		case tabJira:
+			a.jira, cmd = a.jira.Update(msg)
 		}
 		return a, cmd
 
@@ -171,6 +187,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.todos, cmd = a.todos.Update(msg)
 		cmds = append(cmds, cmd)
 		a.notes, cmd = a.notes.Update(msg)
+		cmds = append(cmds, cmd)
+		a.jira, cmd = a.jira.Update(msg)
 		cmds = append(cmds, cmd)
 
 		// Auto-sync to Obsidian whenever the user changes data.
@@ -230,6 +248,8 @@ func (a App) View() string {
 		content = a.todos.View()
 	case tabNotes:
 		content = a.notes.View()
+	case tabJira:
+		content = a.jira.View()
 	}
 
 	sep := subtleStyle.Render(strings.Repeat("─", a.width))
@@ -247,6 +267,7 @@ func (a App) tabBar() string {
 		{"Meetings", tabMeetings, a.cfg.Hotkeys.TabMeetings},
 		{"Todos", tabTodos, a.cfg.Hotkeys.TabTodos},
 		{"Notes", tabNotes, a.cfg.Hotkeys.TabNotes},
+		{"Jira", tabJira, a.cfg.Hotkeys.TabJira},
 	}
 
 	var parts []string
@@ -269,7 +290,7 @@ func (a App) statusBar() string {
 		}
 		return bar.Render(successStyle.Render("✓  " + a.status))
 	}
-	hints := keyStyle.Render("1-4") + mutedStyle.Render(" tabs") +
+	hints := keyStyle.Render("1-5") + mutedStyle.Render(" tabs") +
 		"   " + keyStyle.Render("q") + mutedStyle.Render(" quit")
 	return bar.Render(hints)
 }
@@ -337,6 +358,8 @@ func (a App) isEditing() bool {
 		return a.todos.Editing()
 	case tabNotes:
 		return a.notes.Editing()
+	case tabJira:
+		return a.jira.Editing()
 	}
 	return false
 }

@@ -17,7 +17,16 @@
       "Bash(go test *)",
       "Bash(find ~/go /Users/aprilselby/code/dot -path \"*/bubbles/textarea/textarea.go\" 2>/dev/null | head -3)",
       "Read(//Users/aprilselby/go/**)",
-      "Bash(go env *)"
+      "Bash(go env *)",
+      "Bash(ls ghclient/ && echo \"=== ghclient New ===\" && sed -n '1,80p' ghclient/*.go | grep -n \"func New\\\\|type Client\\\\|package\\\\|import\" ; echo \"=== main.go ===\" && cat main.go)",
+      "Bash(acli version *)",
+      "Bash(acli jira *)",
+      "Bash(gofmt -d config/config.go tui/tab_meetings.go)",
+      "Bash(gofmt -w config/config.go tui/tab_meetings.go)",
+      "Bash(gofmt -l tui/tab_jira.go jira/client.go jira/client_test.go config/config.go tui/tab_meetings.go tui/app.go)"
+    ],
+    "additionalDirectories": [
+      "/Users/aprilselby/code/dot/ghclient"
     ]
   }
 }

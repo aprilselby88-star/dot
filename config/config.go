@@ -13,8 +13,27 @@ type Config struct {
 	GitHub   GitHubConfig   `yaml:"github"`
 	Obsidian ObsidianConfig `yaml:"obsidian"`
 	Storage  StorageConfig  `yaml:"storage"`
+	Jira     JiraConfig     `yaml:"jira"`
 	Hotkeys  HotkeyConfig   `yaml:"hotkeys"`
 	Tags     []TagConfig    `yaml:"tags"`
+}
+
+// JiraConfig holds everything needed to create tickets through the Atlassian CLI (acli).
+// Token is overridden by JIRA_API_TOKEN or DOT_JIRA_TOKEN env vars.
+// CustomFields and ACField are written into acli's "additionalAttributes" verbatim,
+// so their value shape must match what the Jira field expects (string, number, or {value: ...}).
+type JiraConfig struct {
+	Site          string                 `yaml:"site"`                      // e.g. mysite.atlassian.net (no https://)
+	Email         string                 `yaml:"email"`                     // acli login email
+	Token         string                 `yaml:"token"`                     // API token; env-overridable
+	ProjectKey    string                 `yaml:"project_key"`               // e.g. PROJ
+	IssueType     string                 `yaml:"issue_type"`                // default "Task"
+	Assignee      string                 `yaml:"assignee"`                  // email or accountId; "@me" also works
+	Reporter      string                 `yaml:"reporter"`                  // optional
+	DefaultParent string                 `yaml:"default_parent"`            // default parentIssueId prefilled in the form
+	Labels        []string               `yaml:"labels"`                    // optional labels applied to every ticket
+	ACField       string                 `yaml:"acceptance_criteria_field"` // customfield id the AC text is written to
+	CustomFields  map[string]interface{} `yaml:"custom_fields"`             // reporting fields → additionalAttributes
 }
 
 // GitHubConfig holds authentication and repo targeting.
@@ -46,6 +65,7 @@ type HotkeyConfig struct {
 	TabMeetings string `yaml:"tab_meetings"`
 	TabTodos    string `yaml:"tab_todos"`
 	TabNotes    string `yaml:"tab_notes"`
+	TabJira     string `yaml:"tab_jira"`
 	NewItem     string `yaml:"new_item"`
 	Delete      string `yaml:"delete"`
 	WatchPR     string `yaml:"watch_pr"`
@@ -72,11 +92,15 @@ func DefaultConfig() *Config {
 		Storage: StorageConfig{
 			Dir: "~/Documents/Obsidian Vault/.dot",
 		},
+		Jira: JiraConfig{
+			IssueType: "Task",
+		},
 		Hotkeys: HotkeyConfig{
 			TabGitHub:   "1",
 			TabMeetings: "2",
 			TabTodos:    "3",
 			TabNotes:    "4",
+			TabJira:     "5",
 			NewItem:     "n",
 			Delete:      "d",
 			WatchPR:     "w",
@@ -110,6 +134,13 @@ func Load() (*Config, error) {
 	}
 	if t := os.Getenv("DOT_GITHUB_TOKEN"); t != "" {
 		cfg.GitHub.Token = t
+	}
+
+	if t := os.Getenv("JIRA_API_TOKEN"); t != "" {
+		cfg.Jira.Token = t
+	}
+	if t := os.Getenv("DOT_JIRA_TOKEN"); t != "" {
+		cfg.Jira.Token = t
 	}
 
 	return cfg, nil

@@ -64,11 +64,11 @@ type meetingsTab struct {
 	cursor   int
 
 	// form fields
-	titleInput     textinput.Model
-	attendInput    textinput.Model
-	tagsInput      textinput.Model
-	notesArea      textarea.Model
-	decisionsArea  textarea.Model
+	titleInput    textinput.Model
+	attendInput   textinput.Model
+	tagsInput     textinput.Model
+	notesArea     textarea.Model
+	decisionsArea textarea.Model
 
 	// view pane
 	vp viewport.Model
