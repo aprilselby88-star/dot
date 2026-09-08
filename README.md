@@ -2,7 +2,7 @@
 
 A terminal-based work organizer built with Go and [bubbletea](https://github.com/charmbracelet/bubbletea).
 
-Four tabs: GitHub notifications, meeting notes, todos, daily notes. Syncs to an Obsidian daily note automatically.
+Five tabs: GitHub notifications, meeting notes, todos, daily notes, Jira. Syncs to an Obsidian daily note automatically.
 
 ## Quick start
 
@@ -75,6 +75,44 @@ github:
     - myorg/backend
 ```
 
+### Jira
+
+Ticket creation shells out to the Atlassian CLI (`acli`), so `acli` must be on your `$PATH`. Authentication uses `acli`'s own login — either run `acli jira auth login` once yourself, or set `site`/`email`/`token` below and `dot` will log `acli` in for you when a token is present.
+
+```yaml
+jira:
+  site:  "mysite.atlassian.net"   # your Atlassian site, no https://
+  email: "you@company.com"        # acli login email
+
+  # API token — or leave blank and set JIRA_API_TOKEN (or DOT_JIRA_TOKEN) env var.
+  # If blank, dot relies on an existing `acli jira auth login` session.
+  token: ""
+
+  project_key: "PROJ"
+  issue_type:  "Task"             # case-sensitive: Task, Story, Bug, Epic
+  assignee:    "you@company.com"  # email or accountId; "@me" also works
+  reporter:    ""                 # optional
+
+  # Prefilled as the parentIssueId when you start a new ticket (still editable)
+  default_parent: ""
+
+  # Optional labels applied to every ticket
+  labels: []
+
+  # Custom field the Acceptance Criteria text is written into (blank to skip AC)
+  acceptance_criteria_field: ""   # e.g. customfield_10050
+
+  # Reporting custom fields, written into acli's additionalAttributes verbatim.
+  # Value shape must match the Jira field type — a plain string/number, or an
+  # option object like { value: "..." }:
+  custom_fields: {}
+  #   customfield_10001: { value: "Team Rocket" }
+  #   customfield_10002: "some string"
+  #   customfield_10003: 50
+```
+
+The token can also be supplied via the `JIRA_API_TOKEN` or `DOT_JIRA_TOKEN` environment variable instead of the config file.
+
 ### Obsidian path template
 
 `notes_template` is a Go [time.Format](https://pkg.go.dev/time#Layout) string relative to `vault_path`. Year and month folders are created automatically.
@@ -121,13 +159,17 @@ Daily todo list with tag support (`#tag`). Incomplete todos carry forward automa
 
 Free-form daily notes textarea. Saved per day, included in your Obsidian daily note.
 
+### Jira (`5`)
+
+Create Jira tickets without leaving the terminal. Press `n` to start the ticket wizard (parent → summary → description → acceptance criteria), `ctrl+n` to advance, `ctrl+b` to step back, `ctrl+s` to submit. Ticket creation shells out to `acli`; after a ticket is created, press `o`/`Enter` to open it in the browser or `J` to start another. Requires `acli` on your `$PATH` and a configured `jira:` block — see [Configuration](#jira).
+
 ---
 
 ## Key bindings
 
 | Key | Action | Context |
 |-----|--------|---------|
-| `1` – `4` | Switch tabs | When not typing |
+| `1` – `5` | Switch tabs | When not typing |
 | `q` / `ctrl+c` | Quit | — |
 | `j` / `k` | Move cursor | List views |
 | `n` | New item | List mode |

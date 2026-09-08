@@ -23,7 +23,12 @@
       "Bash(acli jira *)",
       "Bash(gofmt -d config/config.go tui/tab_meetings.go)",
       "Bash(gofmt -w config/config.go tui/tab_meetings.go)",
-      "Bash(gofmt -l tui/tab_jira.go jira/client.go jira/client_test.go config/config.go tui/tab_meetings.go tui/app.go)"
+      "Bash(gofmt -l tui/tab_jira.go jira/client.go jira/client_test.go config/config.go tui/tab_meetings.go tui/app.go)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'fix: add missing jira package and tab files *)",
+      "Bash(git push *)",
+      "Bash(git check-ignore *)",
+      "Bash(git commit -m 'chore: add .gitignore for dot binary and Go artifacts *)"
     ],
     "additionalDirectories": [
       "/Users/aprilselby/code/dot/ghclient"
