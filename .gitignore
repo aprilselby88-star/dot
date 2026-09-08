@@ -1,0 +1,7 @@
+# Compiled binary (built via `make install` / `go build`)
+/dot
+
+# Go build & test artifacts
+*.exe
+*.test
+*.out
