@@ -17,6 +17,98 @@ type Config struct {
 	Hotkeys  HotkeyConfig   `yaml:"hotkeys"`
 	Tags     []TagConfig    `yaml:"tags"`
 	Features FeatureConfig  `yaml:"features"`
+	OneOnOne OneOnOneConfig `yaml:"one_on_ones"`
+}
+
+// OneOnOneConfig controls the 1:1 prep tab.
+// Dir is vault-relative; each person gets a running file at <Dir>/<Name>.md.
+// Templates overrides the built-in prep sheet for a kind (manager, skip, peer, report);
+// kinds left out keep the built-in default from DefaultOneOnOneTemplates.
+type OneOnOneConfig struct {
+	Dir       string                       `yaml:"dir"`
+	Templates map[string][]OneOnOneSection `yaml:"templates,omitempty"`
+}
+
+// OneOnOneSection is one heading on a prep sheet.
+// Hint is shown as placeholder text in the empty box; "{name}" is replaced with the person's name.
+// ContextFrom names a section of the previous session (or "Notes" for its live notes)
+// whose text is shown above this section's editor while prepping.
+type OneOnOneSection struct {
+	Title       string `yaml:"title"`
+	Hint        string `yaml:"hint"`
+	ContextFrom string `yaml:"context_from,omitempty"`
+}
+
+// 1:1 kinds. Each maps to a prep sheet template.
+const (
+	KindManager = "manager"
+	KindSkip    = "skip"
+	KindPeer    = "peer"
+	KindReport  = "report"
+)
+
+// OneOnOneKinds lists the kinds in display order.
+var OneOnOneKinds = []string{KindManager, KindSkip, KindPeer, KindReport}
+
+// Template returns the prep sheet sections for a kind: the config override if set,
+// otherwise the built-in default.
+func (c OneOnOneConfig) Template(kind string) []OneOnOneSection {
+	if t := c.Templates[kind]; len(t) > 0 {
+		return t
+	}
+	return DefaultOneOnOneTemplates()[kind]
+}
+
+// DefaultOneOnOneTemplates returns the built-in prep sheet for each 1:1 kind.
+func DefaultOneOnOneTemplates() map[string][]OneOnOneSection {
+	return map[string][]OneOnOneSection{
+		KindManager: {
+			{
+				Title:       "Wins",
+				Hint:        "What materially improved? Focus on outcomes, not activity.\n\ne.g. Mapped the streaming dependencies and identified two manual provisioning steps suitable for automation.",
+				ContextFrom: "Next priorities",
+			},
+			{
+				Title:       "Misses / Learnings",
+				Hint:        "What slipped, failed, or turned out differently than expected? Include the corrective action.\n\ne.g. Catalog API requirements aren't yet aligned across consumers. I'm arranging a design review before committing to an interface.",
+				ContextFrom: "Next priorities",
+			},
+			{
+				Title: "Blockers / Risks",
+				Hint:  "What needs intervention, a decision, or escalation?\n\ne.g. Automated vending depends on agreement about infrastructure ownership and access policies. I need alignment with the relevant platform stakeholders.",
+			},
+			{
+				Title: "Next priorities",
+				Hint:  "What are the 1–3 most important outcomes before your next 1:1?\n\ne.g. Agree the catalog API's initial scope, establish an operational baseline, and nominate an owner for the first automation opportunity.",
+			},
+			{
+				Title:       "Asks / Decisions",
+				Hint:        "What specifically do you need from {name}?\n\ne.g. Confirm whether the first release should prioritize internal platform consumers or broader self-service.",
+				ContextFrom: "Asks / Decisions",
+			},
+		},
+		KindSkip: {
+			{Title: "What I want them to know", Hint: "Themes, not status. What should {name} understand about your area?"},
+			{Title: "Org / strategy questions", Hint: "What's unclear about direction, priorities, or how decisions are being made?"},
+			{Title: "Risks they may not see", Hint: "What's brewing that won't show up in status reports?"},
+			{Title: "Feedback on team / process", Hint: "What's working, what isn't, what would you change?"},
+			{Title: "Asks", Hint: "What specifically do you need from {name}?", ContextFrom: "Asks"},
+		},
+		KindPeer: {
+			{Title: "What I'm working on that touches you", Hint: "Changes, launches, or decisions that affect {name}'s area."},
+			{Title: "Overlaps / blockers", Hint: "Where are we overlapping or blocking each other?"},
+			{Title: "Asks / offers", Hint: "What do you need from {name}, and what can you offer?", ContextFrom: "Asks / offers"},
+			{Title: "Things they should know", Hint: "What are you hearing that {name} should know about?"},
+		},
+		KindReport: {
+			{Title: "How are you doing?", Hint: "Energy, workload, anything outside work affecting things."},
+			{Title: "What's on your mind?", Hint: "Their agenda first. What does {name} want to talk about?"},
+			{Title: "Progress on their priorities", Hint: "How are {name}'s priorities tracking?", ContextFrom: "Progress on their priorities"},
+			{Title: "Feedback", Hint: "Both ways: what to give {name}, and what to ask for."},
+			{Title: "Growth / career", Hint: "The longer-running thread: goals, stretch work, skills."},
+			{Title: "Follow-ups from last time", Hint: "What did you each commit to last time?", ContextFrom: "Notes"},
+		},
+	}
 }
 
 // FeatureConfig toggles optional tabs on or off.
@@ -72,6 +164,7 @@ type HotkeyConfig struct {
 	TabTodos    string `yaml:"tab_todos"`
 	TabNotes    string `yaml:"tab_notes"`
 	TabJira     string `yaml:"tab_jira"`
+	TabOneOnOne string `yaml:"tab_one_on_ones"`
 	NewItem     string `yaml:"new_item"`
 	Delete      string `yaml:"delete"`
 	WatchPR     string `yaml:"watch_pr"`
@@ -101,12 +194,16 @@ func DefaultConfig() *Config {
 		Jira: JiraConfig{
 			IssueType: "Task",
 		},
+		OneOnOne: OneOnOneConfig{
+			Dir: "1-1s",
+		},
 		Hotkeys: HotkeyConfig{
 			TabGitHub:   "1",
 			TabMeetings: "2",
 			TabTodos:    "3",
 			TabNotes:    "4",
 			TabJira:     "5",
+			TabOneOnOne: "6",
 			NewItem:     "n",
 			Delete:      "d",
 			WatchPR:     "w",

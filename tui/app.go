@@ -23,6 +23,7 @@ const (
 	tabTodos
 	tabNotes
 	tabJira
+	tabOneOnOnes
 )
 
 // statusMsg sets a temporary message in the status bar.
@@ -53,6 +54,7 @@ type App struct {
 	todos    todosTab
 	notes    notesTab
 	jira     jiraTab
+	ones     oneOnOnesTab
 
 	width  int
 	height int
@@ -86,6 +88,7 @@ func New(cfg *config.Config) App {
 	a.todos = newTodosTab(cfg, store)
 	a.notes = newNotesTab(cfg, store)
 	a.jira = newJiraTab(cfg, jc)
+	a.ones = newOneOnOnesTab(cfg, store, a.obs)
 	return a
 }
 
@@ -101,6 +104,7 @@ func (a App) Init() tea.Cmd {
 		a.todos.Init(),
 		a.notes.Init(),
 		a.jira.Init(),
+		a.ones.Init(),
 		a.checkSummaries(),
 	)
 }
@@ -125,6 +129,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.notes, cmd = a.notes.UpdateSize(msg.Width, contentH)
 		cmds = append(cmds, cmd)
 		a.jira, cmd = a.jira.UpdateSize(msg.Width, contentH)
+		cmds = append(cmds, cmd)
+		a.ones, cmd = a.ones.UpdateSize(msg.Width, contentH)
 		cmds = append(cmds, cmd)
 		return a, tea.Batch(cmds...)
 
@@ -165,6 +171,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmd := a.saveNotesIfLeaving(tabJira)
 				a.active = tabJira
 				return a, cmd
+			case a.cfg.Hotkeys.TabOneOnOne:
+				cmd := a.saveNotesIfLeaving(tabOneOnOnes)
+				a.active = tabOneOnOnes
+				return a, cmd
 			}
 		}
 
@@ -181,6 +191,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.notes, cmd = a.notes.Update(msg)
 		case tabJira:
 			a.jira, cmd = a.jira.Update(msg)
+		case tabOneOnOnes:
+			a.ones, cmd = a.ones.Update(msg)
 		}
 		return a, cmd
 
@@ -201,13 +213,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 		a.jira, cmd = a.jira.Update(msg)
 		cmds = append(cmds, cmd)
+		a.ones, cmd = a.ones.Update(msg)
+		cmds = append(cmds, cmd)
 
 		// Auto-sync to Obsidian whenever the user changes data.
 		switch msg.(type) {
 		case noteSavedMsg:
 			cmds = append(cmds, a.syncObsidian())
-		case meetingSavedMsg:
-			// Reload todos tab — saveMeeting may have created action-item todos.
+		case meetingSavedMsg, ooSavedMsg:
+			// Reload todos tab — saving may have created action-item todos.
 			cmds = append(cmds, a.todos.loadTodos())
 			cmds = append(cmds, a.syncObsidian())
 		case meetingsLoadedMsg:
@@ -261,6 +275,8 @@ func (a App) View() string {
 		content = a.notes.View()
 	case tabJira:
 		content = a.jira.View()
+	case tabOneOnOnes:
+		content = a.ones.View()
 	}
 
 	sep := subtleStyle.Render(strings.Repeat("─", a.width))
@@ -282,6 +298,7 @@ func (a App) tabBar() string {
 		{"Todos", tabTodos, a.cfg.Hotkeys.TabTodos},
 		{"Notes", tabNotes, a.cfg.Hotkeys.TabNotes},
 		{"Jira", tabJira, a.cfg.Hotkeys.TabJira},
+		{"1:1s", tabOneOnOnes, a.cfg.Hotkeys.TabOneOnOne},
 	}...)
 
 	var parts []string
@@ -304,9 +321,9 @@ func (a App) statusBar() string {
 		}
 		return bar.Render(successStyle.Render("✓  " + a.status))
 	}
-	tabKeys := "2-5"
+	tabKeys := "2-6"
 	if a.githubEnabled() {
-		tabKeys = "1-5"
+		tabKeys = "1-6"
 	}
 	hints := keyStyle.Render(tabKeys) + mutedStyle.Render(" tabs") +
 		"   " + keyStyle.Render("q") + mutedStyle.Render(" quit")
@@ -322,7 +339,7 @@ func (a App) syncObsidian() tea.Cmd {
 		meetings, _ := a.store.LoadMeetings()
 		prs, _ := a.store.LoadTrackedPRs()
 		note, _ := a.store.LoadNote(today)
-		path, err := a.obs.Write(stats, todos, meetings, prs, note)
+		path, err := a.obs.Write(stats, todos, meetings, prs, note, a.todaysOneOnOnes(today))
 		if err != nil {
 			return statusMsg{text: "Obsidian sync failed: " + err.Error(), isError: true}
 		}
@@ -392,6 +409,28 @@ func (a App) isEditing() bool {
 		return a.notes.Editing()
 	case tabJira:
 		return a.jira.Editing()
+	case tabOneOnOnes:
+		return a.ones.Editing()
 	}
 	return false
+}
+
+// todaysOneOnOnes pairs today's 1:1 sessions with their people for the daily note.
+func (a App) todaysOneOnOnes(today string) []obsidian.OneOnOneRef {
+	sessions, _ := a.store.LoadOneOnOnesOn(today)
+	if len(sessions) == 0 {
+		return nil
+	}
+	people, _ := a.store.LoadPeople()
+	byID := map[string]storage.Person{}
+	for _, p := range people {
+		byID[p.ID] = p
+	}
+	var refs []obsidian.OneOnOneRef
+	for _, o := range sessions {
+		if p, ok := byID[o.PersonID]; ok {
+			refs = append(refs, obsidian.OneOnOneRef{Person: p, Session: o})
+		}
+	}
+	return refs
 }

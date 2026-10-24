@@ -37,8 +37,9 @@ func (w *Writer) Write(
 	meetings []storage.Meeting,
 	trackedPRs []storage.TrackedPR,
 	note string,
+	oneOnOnes []OneOnOneRef,
 ) (string, error) {
-	content := w.Build(stats, todos, meetings, trackedPRs, note)
+	content := w.Build(stats, todos, meetings, trackedPRs, note, oneOnOnes)
 	path := w.DailyNotePath()
 
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
@@ -57,6 +58,7 @@ func (w *Writer) Build(
 	meetings []storage.Meeting,
 	trackedPRs []storage.TrackedPR,
 	note string,
+	oneOnOnes []OneOnOneRef,
 ) string {
 	today := time.Now()
 	todayStr := today.Format("2006-01-02")
@@ -202,6 +204,15 @@ func (w *Writer) Build(
 	}
 	if !hasMeetings {
 		b.WriteString("*No meetings today.*\n\n")
+	}
+
+	// 1:1s link out to each person's running file rather than repeating the prep sheet.
+	if len(oneOnOnes) > 0 {
+		b.WriteString("## 1:1s\n\n")
+		for _, ref := range oneOnOnes {
+			fmt.Fprintf(&b, "- [[%s|1:1 with %s]] *(%s)*\n", w.PersonLink(ref.Person), ref.Person.Name, ref.Person.Kind)
+		}
+		b.WriteString("\n")
 	}
 
 	// Tracked PRs

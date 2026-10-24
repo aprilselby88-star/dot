@@ -74,6 +74,7 @@ hotkeys:
   tab_todos:    "3"
   tab_notes:    "4"
   tab_jira:     "5"
+  tab_one_on_ones: "6"
 
   # Actions (context-sensitive)
   new_item:     "n"
@@ -86,6 +87,22 @@ hotkeys:
 # Feature toggles for optional tabs
 features:
   github: false   # GitHub notifications / watch zone tab (off by default)
+
+# 1:1 prep sheets
+one_on_ones:
+  # Vault-relative folder; each person gets a running file at <dir>/<Name>.md
+  dir: "1-1s"
+
+  # Built-in templates exist for manager, skip, peer, and report.
+  # Uncomment to override one. {name} in a hint becomes the person's name;
+  # context_from shows that section from the previous 1:1 ("Notes" = live notes).
+  # templates:
+  #   peer:
+  #     - title: "Shared priorities"
+  #       hint: "What are you and {name} both trying to land?"
+  #     - title: "Asks / offers"
+  #       hint: "What do you need from {name}?"
+  #       context_from: "Asks / offers"
 
 # Capability tags for cross-cutting concerns
 # These are shown as helpers in the tag entry fields

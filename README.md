@@ -2,7 +2,7 @@
 
 A terminal-based work organizer built with Go and [bubbletea](https://github.com/charmbracelet/bubbletea).
 
-Tabs: meeting notes, todos, daily notes, Jira, plus an optional GitHub notifications tab (off by default). Syncs to an Obsidian daily note automatically.
+Tabs: meeting notes, todos, daily notes, Jira, 1:1 prep, plus an optional GitHub notifications tab (off by default). Syncs to an Obsidian daily note automatically.
 
 ## Quick start
 
@@ -170,13 +170,42 @@ Free-form daily notes textarea. Saved per day, included in your Obsidian daily n
 
 Create Jira tickets without leaving the terminal. Press `n` to start the ticket wizard (parent → summary → description → acceptance criteria), `ctrl+n` to advance, `ctrl+b` to step back, `ctrl+s` to submit. Ticket creation shells out to `acli`; after a ticket is created, press `o`/`Enter` to open it in the browser or `J` to start another. Requires `acli` on your `$PATH` and a configured `jira:` block — see [Configuration](#jira).
 
+### 1:1s (`6`)
+
+Prep sheets for recurring 1:1s, organised by person. Add someone with `n` and pick their type: **my manager**, **skip level**, **peer**, or **works for me**. Each type has its own prep sheet template.
+
+Opening a person shows:
+
+- **Since last 1:1** — every line in your daily notes, meeting notes, and todos that `@mentions` them since your last held 1:1 (or the last 30 days). Their handle is the lowercased first name, e.g. `@omar`.
+- **Sessions** — their 1:1 history, newest first.
+
+Press `n` to start a prep sheet (or continue one you haven't held yet). `Tab` / `Shift+Tab` move between sections; the last section is **Notes**, for during the meeting. Where it helps, a section shows what you wrote last time above the box. For example, your manager prep's **Wins** shows last session's **Next priorities**. `Ctrl+O` swaps that for the `@mentions` list. `Esc` saves and closes; it autosaves every 2 minutes too.
+
+- `Action:` / `- [ ]` lines in any section become todos, linked back to the 1:1.
+- A session is dated the day you first add Notes, so prepping the day before still files it under the day it happened.
+- Each person gets a running Obsidian file at `<vault>/1-1s/<Name>.md`, and your daily note links to any 1:1s that day.
+
+Override any template (or the folder) in config:
+
+```yaml
+one_on_ones:
+  dir: "1-1s"
+  templates:
+    peer:                              # manager | skip | peer | report
+      - title: "Shared priorities"
+        hint: "What are you and {name} both trying to land?"
+      - title: "Asks / offers"
+        hint: "What do you need from {name}?"
+        context_from: "Asks / offers"  # show this section from last time
+```
+
 ---
 
 ## Key bindings
 
 | Key | Action | Context |
 |-----|--------|---------|
-| `1` – `5` | Switch tabs | When not typing |
+| `1` – `6` | Switch tabs | When not typing |
 | `q` / `ctrl+c` | Quit | — |
 | `j` / `k` | Move cursor | List views |
 | `n` | New item | List mode |
@@ -191,6 +220,9 @@ Create Jira tickets without leaving the terminal. Press `n` to start the ticket 
 | `ctrl+t` | Jump to title | Meetings form |
 | `ctrl+w` | Jump to attendees | Meetings form |
 | `ctrl+b` | Step back | Meetings form |
+| `Tab` / `Shift+Tab` | Next / previous section | 1:1 prep sheet |
+| `ctrl+o` | Toggle last time / @mentions | 1:1 prep sheet |
+| `e` | Edit name / type | 1:1 person view |
 | `Esc` | Cancel / back | Forms |
 
 All keys are configurable in `~/.config/dot/config.yaml` under `hotkeys:`.
@@ -207,6 +239,7 @@ Plain JSON files stored inside your Obsidian vault at `<vault_path>/.dot/`:
 | `meetings.json` | All meetings |
 | `tracked_prs.json` | Watch zone PRs (including done history) |
 | `daily_notes.json` | Free-form notes keyed by date |
+| `one_on_ones.json` | 1:1 people and sessions |
 
 Keeping data inside the vault means your Obsidian GitHub backup plugin covers everything — notes and structured data together.
 
@@ -220,6 +253,7 @@ The daily note is regenerated on every save and includes:
 - **Todos** — today's tasks with done times, carried-from dates, source meetings
 - **Team Actions** — todos with `@mentions`, grouped by person
 - **Meetings** — summaries with attendees, tags, raw notes in a collapsible block
+- **1:1s** — links to the running file for anyone you had a 1:1 with today
 - **PRs to Watch** — open PRs in a table; done PRs struck through with completion date
 - **Notes** — free-form daily notes
 

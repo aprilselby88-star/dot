@@ -504,34 +504,7 @@ func (t meetingsTab) saveMeeting(autosave bool) tea.Cmd {
 			return meetingSavedMsg{err: err, autosave: autosave}
 		}
 		if len(actions) > 0 {
-			all, _ := t.store.LoadTodos()
-			// Only add action items we haven't already created for this meeting,
-			// so repeated (auto)saves never duplicate todos or resurrect completed ones.
-			existing := make(map[string]bool)
-			for _, td := range all {
-				if td.SourceMeetingID == meetingID {
-					existing[td.Text] = true
-				}
-			}
-			today := time.Now().Format("2006-01-02")
-			added := false
-			for _, action := range actions {
-				if existing[action] {
-					continue
-				}
-				all = append(all, storage.TodoItem{
-					ID:                 storage.NewID(),
-					Text:               action,
-					Date:               today,
-					SourceMeetingID:    meetingID,
-					SourceMeetingTitle: title,
-				})
-				existing[action] = true
-				added = true
-			}
-			if added {
-				_ = t.store.SaveTodos(all)
-			}
+			addSourcedTodos(t.store, meetingID, title, actions)
 		}
 		return meetingSavedMsg{err: nil, autosave: autosave}
 	}
