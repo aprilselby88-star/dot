@@ -16,6 +16,12 @@ type Config struct {
 	Jira     JiraConfig     `yaml:"jira"`
 	Hotkeys  HotkeyConfig   `yaml:"hotkeys"`
 	Tags     []TagConfig    `yaml:"tags"`
+	Features FeatureConfig  `yaml:"features"`
+}
+
+// FeatureConfig toggles optional tabs on or off.
+type FeatureConfig struct {
+	GitHub bool `yaml:"github"` // GitHub notifications / watch zone tab
 }
 
 // JiraConfig holds everything needed to create tickets through the Atlassian CLI (acli).

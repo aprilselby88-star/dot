@@ -2,7 +2,7 @@
 
 A terminal-based work organizer built with Go and [bubbletea](https://github.com/charmbracelet/bubbletea).
 
-Five tabs: GitHub notifications, meeting notes, todos, daily notes, Jira. Syncs to an Obsidian daily note automatically.
+Tabs: meeting notes, todos, daily notes, Jira, plus an optional GitHub notifications tab (off by default). Syncs to an Obsidian daily note automatically.
 
 ## Quick start
 
@@ -132,6 +132,13 @@ The default `"Daily Notes/2006/01 January/02-01-06"` produces `Daily Notes/2026/
 ## Tabs
 
 ### GitHub (`1`)
+
+Disabled by default. Turn it on in your config:
+
+```yaml
+features:
+  github: true
+```
 
 Two panes, toggled with `Tab`:
 

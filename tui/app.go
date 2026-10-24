@@ -65,7 +65,7 @@ func New(cfg *config.Config) App {
 	store, _ := storage.New(config.ExpandPath(cfg.Storage.Dir))
 
 	var ghc *ghclient.Client
-	if cfg.GitHub.Token != "" {
+	if cfg.Features.GitHub && cfg.GitHub.Token != "" {
 		ghc, _ = ghclient.New(&cfg.GitHub)
 	}
 
@@ -78,6 +78,9 @@ func New(cfg *config.Config) App {
 		obs:   obsidian.New(cfg),
 		ghc:   ghc,
 	}
+	if !cfg.Features.GitHub {
+		a.active = tabMeetings
+	}
 	a.github = newGithubTab(cfg, store, ghc)
 	a.meetings = newMeetingsTab(cfg, store)
 	a.todos = newTodosTab(cfg, store)
@@ -87,9 +90,13 @@ func New(cfg *config.Config) App {
 }
 
 func (a App) Init() tea.Cmd {
+	var ghInit tea.Cmd
+	if a.githubEnabled() {
+		ghInit = a.github.Init()
+	}
 	return tea.Batch(
 		tea.EnableBracketedPaste,
-		a.github.Init(),
+		ghInit,
 		a.meetings.Init(),
 		a.todos.Init(),
 		a.notes.Init(),
@@ -107,8 +114,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.width, a.height = msg.Width, msg.Height
 		contentH := msg.Height - 3 // tab bar + status bar
 		var cmd tea.Cmd
-		a.github, cmd = a.github.UpdateSize(msg.Width, contentH)
-		cmds = append(cmds, cmd)
+		if a.githubEnabled() {
+			a.github, cmd = a.github.UpdateSize(msg.Width, contentH)
+			cmds = append(cmds, cmd)
+		}
 		a.meetings, cmd = a.meetings.UpdateSize(msg.Width, contentH)
 		cmds = append(cmds, cmd)
 		a.todos, cmd = a.todos.UpdateSize(msg.Width, contentH)
@@ -137,7 +146,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "q":
 				return a, tea.Quit
-			case a.cfg.Hotkeys.TabGitHub:
+			case a.githubHotkey():
 				cmd := a.saveNotesIfLeaving(tabGitHub)
 				a.active = tabGitHub
 				return a, cmd
@@ -180,8 +189,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// operations (GitHub polling, storage loads) are always delivered.
 		todosWereLoaded := a.todos.loaded
 		var cmd tea.Cmd
-		a.github, cmd = a.github.Update(msg)
-		cmds = append(cmds, cmd)
+		if a.githubEnabled() {
+			a.github, cmd = a.github.Update(msg)
+			cmds = append(cmds, cmd)
+		}
 		a.meetings, cmd = a.meetings.Update(msg)
 		cmds = append(cmds, cmd)
 		a.todos, cmd = a.todos.Update(msg)
@@ -262,13 +273,16 @@ func (a App) tabBar() string {
 		id    tabID
 		key   string
 	}
-	entries := []entry{
-		{"GitHub", tabGitHub, a.cfg.Hotkeys.TabGitHub},
+	var entries []entry
+	if a.githubEnabled() {
+		entries = append(entries, entry{"GitHub", tabGitHub, a.cfg.Hotkeys.TabGitHub})
+	}
+	entries = append(entries, []entry{
 		{"Meetings", tabMeetings, a.cfg.Hotkeys.TabMeetings},
 		{"Todos", tabTodos, a.cfg.Hotkeys.TabTodos},
 		{"Notes", tabNotes, a.cfg.Hotkeys.TabNotes},
 		{"Jira", tabJira, a.cfg.Hotkeys.TabJira},
-	}
+	}...)
 
 	var parts []string
 	for _, e := range entries {
@@ -290,7 +304,11 @@ func (a App) statusBar() string {
 		}
 		return bar.Render(successStyle.Render("✓  " + a.status))
 	}
-	hints := keyStyle.Render("1-5") + mutedStyle.Render(" tabs") +
+	tabKeys := "2-5"
+	if a.githubEnabled() {
+		tabKeys = "1-5"
+	}
+	hints := keyStyle.Render(tabKeys) + mutedStyle.Render(" tabs") +
 		"   " + keyStyle.Render("q") + mutedStyle.Render(" quit")
 	return bar.Render(hints)
 }
@@ -346,6 +364,20 @@ func (a App) saveNotesIfLeaving(next tabID) tea.Cmd {
 		return a.notes.saveNote()
 	}
 	return nil
+}
+
+// githubEnabled reports whether the GitHub tab is turned on via features.github.
+func (a App) githubEnabled() bool {
+	return a.cfg.Features.GitHub
+}
+
+// githubHotkey returns the GitHub tab hotkey, or "" when the tab is disabled
+// so the key never matches a keypress.
+func (a App) githubHotkey() string {
+	if !a.githubEnabled() {
+		return ""
+	}
+	return a.cfg.Hotkeys.TabGitHub
 }
 
 func (a App) isEditing() bool {

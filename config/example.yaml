@@ -83,6 +83,10 @@ hotkeys:
   save:         "ctrl+s"
   open_browser: "o"
 
+# Feature toggles for optional tabs
+features:
+  github: false   # GitHub notifications / watch zone tab (off by default)
+
 # Capability tags for cross-cutting concerns
 # These are shown as helpers in the tag entry fields
 tags:

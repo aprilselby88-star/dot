@@ -28,7 +28,8 @@
       "Bash(git commit -m 'fix: add missing jira package and tab files *)",
       "Bash(git push *)",
       "Bash(git check-ignore *)",
-      "Bash(git commit -m 'chore: add .gitignore for dot binary and Go artifacts *)"
+      "Bash(git commit -m 'chore: add .gitignore for dot binary and Go artifacts *)",
+      "Bash(python3 *)"
     ],
     "additionalDirectories": [
       "/Users/aprilselby/code/dot/ghclient"
